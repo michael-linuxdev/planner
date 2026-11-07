@@ -26,7 +26,7 @@
     } catch (e) {}
   </script>
 </head>
-<body data-tab="plan">
+<body data-tab="focus">
   <noscript><p class="noscript">Bitte JavaScript aktivieren – der Tagesplaner läuft komplett lokal in deinem Browser.</p></noscript>
 
   <!-- ================= Onboarding ================= -->
@@ -41,91 +41,79 @@
         <li data-icon="offline">Funktioniert offline</li>
         <li data-icon="smile">Kein Konto, keine KI</li>
       </ul>
-      <button id="onb-cancel" type="button" class="btn ghost wide" hidden>Zurück zum Plan</button>
+      <button id="onb-cancel" type="button" class="btn ghost wide" hidden>Zurück</button>
     </div>
   </section>
 
   <!-- ================= App ================= -->
   <div id="app" class="app" hidden>
-    <header class="topbar">
-      <div class="topbar-row">
-        <button id="day-prev" type="button" class="icon-btn" aria-label="Vorheriger Tag" data-icon="chevronL"></button>
-        <div class="day-title">
-          <h1 id="day-name">Heute</h1>
-          <p id="day-date"></p>
-        </div>
-        <button id="day-next" type="button" class="icon-btn" aria-label="Nächster Tag" data-icon="chevron"></button>
-        <button id="day-today" type="button" class="btn small pill" hidden>Heute</button>
-        <span class="topbar-spacer"></span>
-        <button id="btn-focus-top" type="button" class="btn small desk-only" data-icon="focus"><span>Fokus</span></button>
-        <button id="btn-more-top" type="button" class="icon-btn desk-only" aria-label="Menü und Einstellungen" data-icon="settings"></button>
-      </div>
-      <nav id="week" class="week" aria-label="Woche"></nav>
-    </header>
+    <nav class="tabbar" aria-label="Bereiche">
+      <span class="brand" aria-hidden="true"><img src="icons/icon.svg" alt="" width="32" height="32">Tagesplaner</span>
+      <button type="button" class="tab" data-tab="focus" data-icon="focus"><span>Jetzt</span></button>
+      <button type="button" class="tab" data-tab="plan" data-icon="plan"><span>Heute</span></button>
+      <button id="fab" type="button" class="fab" aria-label="Neu hinzufügen" data-icon="plus"><span class="fab-label">Neu</span></button>
+      <button type="button" class="tab" data-tab="inbox" data-icon="inbox"><span>Später</span><i id="tab-inbox-count" class="tab-count" hidden></i></button>
+      <button id="btn-more" type="button" class="tab" data-icon="more" aria-haspopup="dialog"><span>Mehr</span></button>
+    </nav>
 
-    <div class="layout">
-      <aside class="side">
-        <section id="side-now" class="panel side-now desk-only" aria-label="Jetzt"></section>
-        <div class="side-actions desk-only">
-          <button id="btn-add-side" type="button" class="btn primary" data-icon="plus"><span>Neuer Block</span></button>
-          <button id="btn-replan-side" type="button" class="btn" data-icon="refresh"><span>Tag neu planen</span></button>
-        </div>
-        <section id="inbox" class="panel inbox" aria-labelledby="inbox-title">
-          <div class="panel-head">
-            <h2 id="inbox-title"><span data-icon="inbox"></span>Später</h2>
-            <span id="inbox-count" class="count"></span>
+    <div class="views">
+      <!-- Jetzt -->
+      <section id="focus" class="view focus" aria-labelledby="focus-h">
+        <header class="view-head">
+          <h1 id="focus-h">Jetzt</h1>
+          <span id="focus-clock" class="focus-clock"></span>
+        </header>
+        <div id="focus-body" class="focus-body"></div>
+      </section>
+
+      <!-- Heute -->
+      <section id="plan" class="view plan" aria-labelledby="day-name">
+        <header class="topbar">
+          <div class="topbar-row">
+            <button id="day-prev" type="button" class="icon-btn" aria-label="Vorheriger Tag" data-icon="chevronL"></button>
+            <div class="day-title">
+              <h1 id="day-name">Heute</h1>
+              <p id="day-date"></p>
+            </div>
+            <button id="day-next" type="button" class="icon-btn" aria-label="Nächster Tag" data-icon="chevron"></button>
+            <button id="day-today" type="button" class="btn small pill" hidden>Heute</button>
           </div>
-          <form id="inbox-add" class="quick-add" autocomplete="off">
-            <input id="inbox-input" type="text" maxlength="80" placeholder="Was geht dir durch den Kopf?" aria-label="Neue Aufgabe für später" enterkeyhint="done">
-            <button type="submit" class="icon-btn" aria-label="Zu Später hinzufügen" data-icon="plus"></button>
-          </form>
-          <ul id="inbox-list" class="inbox-list"></ul>
-          <p class="panel-hint desk-only">Tipp: Aufgaben auf die Zeitleiste ziehen – oder „Einplanen“ tippen.</p>
-        </section>
-      </aside>
-
-      <main id="plan" class="plan">
+          <nav id="week" class="week" aria-label="Woche"></nav>
+        </header>
         <div id="plan-top"></div>
         <div id="timeline" class="timeline" aria-label="Zeitleiste">
           <div id="grid" class="grid" aria-hidden="true"></div>
-          <div id="gaps" class="gaps"></div>
           <div id="items" class="items"></div>
+          <div id="place-layer" class="place-layer" hidden aria-hidden="true"></div>
           <div id="drop-preview" class="drop-preview" hidden aria-hidden="true"><span></span></div>
           <div id="now-line" class="now-line" hidden aria-hidden="true"><span id="now-label" class="now-label"></span></div>
         </div>
-        <div id="plan-empty" class="empty" hidden></div>
-        <div class="plan-foot">
-          <button id="btn-replan" type="button" class="btn ghost" data-icon="refresh"><span>Tag neu planen</span></button>
-          <button id="btn-save-tpl" type="button" class="btn ghost" data-icon="star"><span>Als meine Vorlage speichern</span></button>
-        </div>
-      </main>
+      </section>
 
-      <section id="focus" class="focus" aria-label="Fokus – Jetzt">
-        <div class="focus-inner">
-          <header class="focus-head">
-            <span class="focus-kicker">Jetzt</span>
-            <span id="focus-clock" class="focus-clock"></span>
-            <button id="focus-close" type="button" class="icon-btn desk-only" aria-label="Fokus schließen" data-icon="close"></button>
-          </header>
-          <div id="focus-body" class="focus-body"></div>
-        </div>
+      <!-- Später -->
+      <section id="inbox" class="view inbox" aria-labelledby="inbox-h">
+        <header class="view-head">
+          <h1 id="inbox-h">Später</h1>
+          <span id="inbox-count" class="count"></span>
+        </header>
+        <ul id="inbox-list" class="inbox-list"></ul>
       </section>
     </div>
 
-    <nav class="tabbar" aria-label="Bereiche">
-      <button type="button" class="tab" data-tab="plan" data-icon="plan"><span>Plan</span></button>
-      <button type="button" class="tab" data-tab="focus" data-icon="focus"><span>Jetzt</span></button>
-      <button id="fab" type="button" class="fab" aria-label="Neuer Block" data-icon="plus"></button>
-      <button type="button" class="tab" data-tab="inbox" data-icon="inbox"><span>Später</span><i id="tab-inbox-count" class="tab-count" hidden></i></button>
-      <button id="btn-more" type="button" class="tab" data-icon="more"><span>Mehr</span></button>
-    </nav>
+    <div id="place-bar" class="place-bar" hidden>
+      <p id="place-text"></p>
+      <div class="row-btns">
+        <button id="place-next" type="button" class="btn small primary" data-icon="check"><span></span></button>
+        <button id="place-cancel" type="button" class="btn small">Abbrechen</button>
+      </div>
+    </div>
   </div>
 
   <!-- ================= Editor ================= -->
   <dialog id="editor" class="sheet" aria-labelledby="ed-title">
     <form id="ed-form" novalidate>
       <header class="sheet-head">
-        <h2 id="ed-title">Block</h2>
+        <h2 id="ed-title">Neu</h2>
         <button type="button" class="icon-btn" data-close aria-label="Schließen" data-icon="close"></button>
       </header>
       <div class="sheet-body">
@@ -138,40 +126,54 @@
         </div>
         <div id="ed-icons" class="icon-grid" role="radiogroup" aria-label="Symbol" hidden></div>
 
+        <div id="ed-when" class="field">
+          <div class="segmented wide" role="radiogroup" aria-label="Wann">
+            <label><input type="radio" name="when" value="block"><span>Im Plan</span></label>
+            <label><input type="radio" name="when" value="inbox"><span>Später (ohne Uhrzeit)</span></label>
+          </div>
+        </div>
+
         <fieldset class="field">
           <legend class="field-label">Art</legend>
           <div id="ed-types" class="type-grid"></div>
+          <button id="ed-more-types" type="button" class="link-btn" aria-expanded="false" aria-controls="ed-types-more">Mehr Typen</button>
+          <div id="ed-types-more" class="type-grid" hidden></div>
         </fieldset>
-
-        <div class="field-row" id="ed-time-row">
-          <div class="field">
-            <span class="field-label" id="ed-start-label">Start</span>
-            <div class="timepick" role="group" aria-labelledby="ed-start-label">
-              <select id="ed-h" aria-label="Stunde"></select><span aria-hidden="true">:</span><select id="ed-m" aria-label="Minute"></select>
-            </div>
-          </div>
-          <div class="field">
-            <span class="field-label" id="ed-dur-label">Dauer</span>
-            <div class="stepper" role="group" aria-labelledby="ed-dur-label">
-              <button type="button" class="icon-btn" data-dur="-1" aria-label="5 Minuten kürzer" data-icon="minus"></button>
-              <output id="ed-dur"></output>
-              <button type="button" class="icon-btn" data-dur="1" aria-label="5 Minuten länger" data-icon="plus"></button>
-            </div>
-          </div>
-        </div>
-        <div id="ed-chips" class="chips" role="group" aria-label="Schnellauswahl Dauer"></div>
-        <p id="ed-end" class="field-hint"></p>
-
-        <label class="field" id="ed-repeat-field">
-          <span class="field-label">Wiederholen</span>
-          <select id="ed-repeat" class="select"></select>
-        </label>
 
         <fieldset class="field">
-          <legend class="field-label">Unteraufgaben</legend>
-          <ul id="ed-subs" class="edit-subs"></ul>
-          <button id="ed-sub-add" type="button" class="btn ghost" data-icon="plus"><span>Unteraufgabe</span></button>
+          <legend class="field-label">Dauer</legend>
+          <div id="ed-chips" class="chips"></div>
         </fieldset>
+        <p id="ed-end" class="field-hint"></p>
+
+        <details id="ed-detail" class="ed-detail">
+          <summary>Genauer</summary>
+          <div class="field-row">
+            <div class="field" id="ed-start-field">
+              <span class="field-label" id="ed-start-label">Start</span>
+              <div class="timepick" role="group" aria-labelledby="ed-start-label">
+                <select id="ed-h" aria-label="Stunde"></select><span aria-hidden="true">:</span><select id="ed-m" aria-label="Minute"></select>
+              </div>
+            </div>
+            <div class="field">
+              <span class="field-label" id="ed-dur-label">Eigene Dauer</span>
+              <div class="stepper" role="group" aria-labelledby="ed-dur-label">
+                <button type="button" class="icon-btn" data-dur="-1" aria-label="5 Minuten kürzer" data-icon="minus"></button>
+                <output id="ed-dur"></output>
+                <button type="button" class="icon-btn" data-dur="1" aria-label="5 Minuten länger" data-icon="plus"></button>
+              </div>
+            </div>
+          </div>
+          <label class="field" id="ed-repeat-field">
+            <span class="field-label">Wiederholen</span>
+            <select id="ed-repeat" class="select"></select>
+          </label>
+          <fieldset class="field">
+            <legend class="field-label">Unteraufgaben</legend>
+            <ul id="ed-subs" class="edit-subs"></ul>
+            <button id="ed-sub-add" type="button" class="btn ghost" data-icon="plus"><span>Unteraufgabe</span></button>
+          </fieldset>
+        </details>
       </div>
       <footer class="sheet-foot">
         <div class="foot-secondary">
@@ -185,7 +187,7 @@
     </form>
   </dialog>
 
-  <!-- ================= Mehr / Einstellungen ================= -->
+  <!-- ================= Mehr ================= -->
   <dialog id="more" class="sheet" aria-labelledby="more-title">
     <div class="sheet-inner">
       <header class="sheet-head">
@@ -194,10 +196,22 @@
       </header>
       <div class="sheet-body">
         <section class="group">
-          <h3 class="group-title">Dieser Tag</h3>
+          <h3 class="group-title">Heute</h3>
           <div class="list">
+            <button id="m-wrap" type="button" class="list-btn" data-icon="moon"><span><b>Tag abschließen</b><small>Offenes auf morgen oder nach „Später“</small></span></button>
             <button id="m-replan" type="button" class="list-btn" data-icon="refresh"><span><b>Tag neu planen</b><small>Mit Rollen-Vorlage, eigener Vorlage oder leer</small></span></button>
-            <button id="m-save-tpl" type="button" class="list-btn" data-icon="star"><span><b>Als meine Vorlage speichern</b><small>Diesen Tagesablauf wiederverwenden</small></span></button>
+            <button id="m-ics" type="button" class="list-btn" data-icon="calendar"><span><b>In Kalender übernehmen</b><small>.ics-Datei mit Erinnerung 10 Min vorher</small></span></button>
+          </div>
+          <p class="field-label" id="lbl-energy">Energie heute <small class="muted">(optional)</small></p>
+          <div id="m-energy" class="energy-row" role="group" aria-labelledby="lbl-energy"></div>
+          <p id="m-energy-tip" class="muted small"></p>
+        </section>
+
+        <section class="group">
+          <h3 class="group-title">Vorlagen</h3>
+          <div class="list">
+            <button id="m-save-tpl" type="button" class="list-btn" data-icon="star"><span><b>Als meine Vorlage speichern</b><small>Den angezeigten Tag wiederverwenden</small></span></button>
+            <button id="s-role-btn" type="button" class="list-btn" data-icon="smile"><span><b>Rolle wechseln</b><small id="s-role"></small></span></button>
           </div>
           <label class="row-field">
             <span>Neue Tage starten mit</span>
@@ -205,8 +219,8 @@
           </label>
         </section>
 
-        <section class="group">
-          <h3 class="group-title">Darstellung</h3>
+        <details class="group fold">
+          <summary class="group-title">Darstellung</summary>
           <div class="row-field">
             <span id="lbl-theme">Erscheinungsbild</span>
             <div class="segmented" role="radiogroup" aria-labelledby="lbl-theme">
@@ -242,10 +256,13 @@
               <label><input type="radio" name="snap" value="15"><span>15 Min</span></label>
             </div>
           </div>
-        </section>
+          <h4 class="sub-title">Block-Arten</h4>
+          <ul id="legend" class="legend-list"></ul>
+        </details>
 
-        <section class="group">
-          <h3 class="group-title">Erinnerungen <small>10 Min vor dem nächsten Block</small></h3>
+        <details class="group fold">
+          <summary class="group-title">Erinnerungen</summary>
+          <p class="muted small fold-lead">Die App erinnert 10 Min vor dem nächsten Block, solange sie geöffnet ist. Für Erinnerungen, die immer ankommen: „In Kalender übernehmen“.</p>
           <label class="row-field switch">
             <span>Sanfter Ton</span>
             <input id="s-sound" type="checkbox" role="switch">
@@ -255,22 +272,14 @@
             <input id="s-vibrate" type="checkbox" role="switch">
           </label>
           <label class="row-field switch">
-            <span>Benachrichtigung<small id="s-notify-hint">Funktioniert, solange die App geöffnet ist (auch im Hintergrund).</small></span>
+            <span>Benachrichtigung<small id="s-notify-hint">Auch wenn die App im Hintergrund ist.</small></span>
             <input id="s-notify" type="checkbox" role="switch">
           </label>
           <button id="s-test" type="button" class="btn small" data-icon="bell"><span>Erinnerung testen</span></button>
-        </section>
+        </details>
 
-        <section class="group">
-          <h3 class="group-title">Rolle</h3>
-          <div class="row-field">
-            <span id="s-role"></span>
-            <button id="s-role-btn" type="button" class="btn small">Wechseln</button>
-          </div>
-        </section>
-
-        <section class="group">
-          <h3 class="group-title">Daten <small>nur auf diesem Gerät</small></h3>
+        <details class="group fold">
+          <summary class="group-title">Daten &amp; App</summary>
           <div class="list">
             <button id="s-export" type="button" class="list-btn" data-icon="download"><span><b>Sicherung exportieren</b><small>JSON-Datei herunterladen</small></span></button>
             <button id="s-import" type="button" class="list-btn" data-icon="upload"><span><b>Sicherung importieren</b><small>Ersetzt die aktuellen Daten (rückgängig möglich)</small></span></button>
@@ -278,13 +287,8 @@
             <button id="s-reset" type="button" class="list-btn danger" data-icon="trash"><span><b>Alle Daten löschen</b></span></button>
           </div>
           <input id="s-import-file" type="file" accept="application/json,.json" hidden>
-        </section>
-
-        <section class="group">
-          <h3 class="group-title">Block-Arten</h3>
-          <ul id="legend" class="legend-list"></ul>
-        </section>
-        <p class="about">Tagesplaner · Version 2 · Kein Konto, keine Cloud, keine KI. Deine Daten verlassen nie dieses Gerät.</p>
+        </details>
+        <p class="about">Tagesplaner · Version 3 · Kein Konto, keine Cloud, keine KI. Deine Daten verlassen nie dieses Gerät.</p>
       </div>
     </div>
   </dialog>

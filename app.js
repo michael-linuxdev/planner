@@ -1,4 +1,4 @@
-/* Tagesplaner v2 – visueller Tagesplan, komplett lokal (localStorage), offline (Service Worker).
+/* Tagesplaner v3 – visueller Tagesplan, komplett lokal (localStorage), offline (Service Worker).
  * Vanilla JS, kein Build-Schritt, keine externen Anfragen. */
 'use strict';
 
@@ -65,7 +65,6 @@
     plus: '<path d="M12 5v14M5 12h14"/>',
     minus: '<path d="M5 12h14"/>',
     refresh: '<path d="M20 11a8 8 0 0 0-14.6-4.5L4 8"/><path d="M4 3.5V8h4.5"/><path d="M4 13a8 8 0 0 0 14.6 4.5L20 16"/><path d="M20 20.5V16h-4.5"/>',
-    settings: '<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/>',
     close: '<path d="M6 6l12 12M18 6L6 18"/>',
     check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
     trash: '<path d="M4 7h16M10 11v6M14 11v6"/><path d="M6 7l1 12.5A1.6 1.6 0 0 0 8.6 21h6.8a1.6 1.6 0 0 0 1.6-1.5L18 7"/><path d="M9.5 7V4.5h5V7"/>',
@@ -111,6 +110,10 @@
   };
   const TYPE_ORDER = Object.keys(TYPES);
   const FOCUS_TYPES = ['deep', 'focused'];
+  // Beim Anlegen zeigen wir nur vier einfache Arten; alle acht bleiben unter „Mehr Typen“.
+  const SIMPLE = { deep: 'Fokus', meeting: 'Termin', pause: 'Pause', quick: 'Kleinkram' };
+  const MAIN_TYPES = Object.keys(SIMPLE);
+  const typeLabel = (t) => SIMPLE[t] || TYPES[t].label;
 
   // ==================================================================
   // Rollen + Vorlagen  [Start, Dauer, Art, Titel, Unteraufgaben, Symbol]
@@ -212,7 +215,6 @@
     return m ? h + ' Std ' + m + ' Min' : h + ' Std';
   };
   const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const isDesktop = () => matchMedia('(min-width: 1000px)').matches;
 
   // Demo-Zeit: ?zeit=10:25 fixiert die Uhrzeit
   const demoMin = parseTime(new URLSearchParams(location.search).get('zeit'));
@@ -306,7 +308,8 @@
   let viewKey = todayKey();
   const drafts = {};          // erzeugte, noch nicht gespeicherte Tage (Zukunft)
   const openIds = new Set();  // aufgeklappte Unteraufgaben (nur Ansicht)
-  let tab = 'plan';
+  let tab = 'focus';          // Start-Ansicht: Jetzt
+  let place = null;          // Aufgabe aus „Später“, die gerade per Tippen eingeplant wird
 
   function save() {
     const cutoff = addDays(todayKey(), -KEEP_PAST_DAYS);
@@ -416,9 +419,9 @@
   const el = {
     onboarding: $('#onboarding'), app: $('#app'), roleList: $('#role-list'), onbCancel: $('#onb-cancel'),
     dayName: $('#day-name'), dayDate: $('#day-date'), dayToday: $('#day-today'), week: $('#week'),
-    planTop: $('#plan-top'), timeline: $('#timeline'), grid: $('#grid'), gaps: $('#gaps'), items: $('#items'),
-    nowLine: $('#now-line'), nowLabel: $('#now-label'), dropPreview: $('#drop-preview'), planEmpty: $('#plan-empty'),
-    sideNow: $('#side-now'), inbox: $('#inbox'), inboxList: $('#inbox-list'), inboxCount: $('#inbox-count'),
+    planTop: $('#plan-top'), timeline: $('#timeline'), grid: $('#grid'), items: $('#items'),
+    nowLine: $('#now-line'), nowLabel: $('#now-label'), dropPreview: $('#drop-preview'),
+    placeLayer: $('#place-layer'), placeBar: $('#place-bar'), inboxList: $('#inbox-list'), inboxCount: $('#inbox-count'),
     tabInboxCount: $('#tab-inbox-count'), focus: $('#focus'), focusBody: $('#focus-body'), focusClock: $('#focus-clock'),
     editor: $('#editor'), more: $('#more'), choice: $('#choice'), toast: $('#toast'), live: $('#sr-live')
   };
@@ -476,6 +479,7 @@
     renderPlanTop();
     renderTimeline();
     renderInbox();
+    renderPlace();
     updateLive();
   }
 
@@ -515,7 +519,6 @@
       state.role = id;
       clearDrafts();
       state.days[viewKey] = { blocks: baseBlocks('role').concat(recurringFor(viewKey)), energy: (state.days[viewKey] || {}).energy || null };
-      dismissPast(viewKey);
     });
     scrollToNow();
     if (first) announce('Plan für ' + ROLES[id].name + ' geladen.');
@@ -571,105 +574,119 @@
   el.week.addEventListener('click', (e) => { const b = e.target.closest('[data-day]'); if (b) goDay(b.dataset.day); });
 
   // ---------- Karten über der Zeitleiste ----------
-  // Ausgeblendete „liegen geblieben“-Hinweise überleben ein Neuladen (nur für heute gespeichert)
-  const MISSED_KEY = 'tagesplaner.missedSeen';
-  const dismissedMissed = (() => {
-    let ids = [];
-    try { const o = JSON.parse(localStorage.getItem(MISSED_KEY) || 'null'); if (o && o.day === todayKey() && Array.isArray(o.ids)) ids = o.ids; } catch (_) { /* egal */ }
-    const set = new Set(ids);
-    const add = set.add.bind(set);
-    set.add = (id) => { add(id); try { localStorage.setItem(MISSED_KEY, JSON.stringify({ day: todayKey(), ids: Array.from(set) })); } catch (_) { /* egal */ } return set; };
-    return set;
-  })();
-  // Nach Rollenwahl / Neu planen nicht sofort „liegen geblieben“ melden
-  function dismissPast(k) {
-    if (k !== todayKey()) return;
-    const n = nowMin();
-    getDay(k).blocks.forEach((b) => { if (b.start + b.dur <= n) dismissedMissed.add(b.id); });
-  }
   function renderPlanTop() {
     const day = viewDay();
     const blocks = day.blocks;
     let html = '';
 
-    if (!state.tipsSeen) {
-      html += '<section class="card-note tips"><h2>So funktioniert’s</h2><ul>' +
-        '<li>' + icon('check') + '<span><b>Kreis antippen</b> – Block abhaken</span></li>' +
-        '<li>' + icon('grip') + '<span><b>Symbol ziehen</b> oder Karte lange drücken – verschieben</span></li>' +
-        '<li>' + icon('minus') + '<span><b>Unteren Rand ziehen</b> – Dauer ändern</span></li>' +
-        '<li>' + icon('pen') + '<span><b>Karte antippen</b> – bearbeiten, Symbol wählen, wiederholen</span></li>' +
-        '</ul><button type="button" class="btn small primary" data-act="tips-ok">Verstanden</button></section>';
+    if (!state.tipsSeen && blocks.length) {
+      html += '<section class="card-note tips"><p>' + icon('grip') + '<span><b>Tipp:</b> Symbol ziehen verschiebt, die Unterkante ändert die Dauer, der Kreis hakt ab.</span></p>' +
+        '<button type="button" class="icon-btn" data-act="tips-ok" aria-label="Tipp ausblenden">' + icon('close') + '</button></section>';
     }
 
     const prog = dayProgress(viewKey);
-    const focusMin = blocks.filter((b) => FOCUS_TYPES.includes(b.type)).reduce((a, b) => a + b.dur, 0);
-    const pauseMin = blocks.filter((b) => b.type === 'pause').reduce((a, b) => a + b.dur, 0);
     if (blocks.length) {
       const pct = prog ? Math.round((prog.done / prog.total) * 100) : 0;
+      const en = day.energy ? ' · Energie: ' + ENERGY[day.energy - 1].label : '';
+      const focusMin = blocks.filter((b) => FOCUS_TYPES.includes(b.type)).reduce((a, b) => a + b.dur, 0);
       html += '<section class="daycard">' +
-        '<div class="dc-ring" style="--p:' + pct + '"><svg viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="15.5" class="trk"/><circle cx="18" cy="18" r="15.5" class="val" pathLength="100" style="stroke-dasharray:' + pct + ' 100"/></svg><span>' + pct + '%</span></div>' +
-        '<div class="dc-text"><b>' + (prog ? prog.done + ' von ' + prog.total + ' erledigt' : 'Noch nichts abzuhaken') + '</b>' +
-        '<span>' + (focusMin ? 'Fokus ' + durText(focusMin) : 'Kein Fokus-Block') + ' · ' + (pauseMin ? 'Pausen ' + durText(pauseMin) : 'keine Pause geplant') + '</span></div>' +
+        '<div class="dc-ring"><svg viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="15.5" class="trk"/><circle cx="18" cy="18" r="15.5" class="val" pathLength="100" style="stroke-dasharray:' + pct + ' 100"/></svg><span>' + pct + '%</span></div>' +
+        '<div class="dc-text"><b>' + (prog ? prog.done + ' von ' + prog.total + ' geschafft' : 'Noch nichts abzuhaken') + '</b>' +
+        '<span>' + (focusMin ? 'Fokus ' + durText(focusMin) : 'Kein Fokus-Block') + esc(en) + '</span></div>' +
         '</section>';
     }
 
-    if (isToday()) {
-      const en = day.energy;
-      if (!en) {
-        html += '<section class="card-note energy"><h2>Wie ist deine Energie heute?</h2><div class="energy-row" role="group" aria-label="Energie">' +
-          ENERGY.map((e) => '<button type="button" class="en-btn en-' + e.v + '" data-energy="' + e.v + '">' + batteryIcon(e.v) + '<span>' + e.label + '</span></button>').join('') +
-          '</div><p class="muted small">Optional · bleibt nur auf diesem Gerät</p></section>';
-      } else {
-        const e = ENERGY[en - 1];
-        html += '<section class="energy-mini en-' + en + '"><span class="en-ic">' + batteryIcon(en) + '</span><span><b>Energie: ' + e.label + '</b><small>' + esc(e.tip) + '</small></span>' +
-          '<button type="button" class="btn small ghost" data-act="energy-reset">Ändern</button></section>';
-      }
-      const n = nowMin();
-      const missed = blocks.filter((b) => !b.done && b.start + b.dur <= n && b.type !== 'buffer' && b.type !== 'pause' && !dismissedMissed.has(b.id));
-      if (missed.length) {
-        html += '<section class="card-note missed"><p><b>' + (missed.length === 1 ? '1 Block ist' : missed.length + ' Blöcke sind') + ' liegen geblieben.</b> Kein Problem – das passiert.</p>' +
-          '<div class="row-btns"><button type="button" class="btn small" data-act="missed-later" data-icon-inline>' + icon('inbox') + '<span>Ins Später verschieben</span></button>' +
-          '<button type="button" class="btn small ghost" data-act="missed-hide">Ausblenden</button></div></section>';
-      }
-    }
+    if (isToday() && wrapDue()) html += wrapCardHtml('card-note wrap', 'data-act');
 
     if (!blocks.length) {
       html += '<section class="empty-card">' +
         '<svg class="empty-art" viewBox="0 0 120 80" aria-hidden="true"><rect x="30" y="8" width="70" height="14" rx="7" class="e1"/><rect x="30" y="30" width="48" height="14" rx="7" class="e2"/><rect x="30" y="52" width="60" height="14" rx="7" class="e3"/><circle cx="16" cy="15" r="6" class="e1"/><circle cx="16" cy="37" r="6" class="e2"/><circle cx="16" cy="59" r="6" class="e3"/></svg>' +
         '<h2>' + (isPastDay() ? 'Für diesen Tag gibt es keinen Plan.' : 'Noch nichts geplant.') + '</h2>' +
-        '<p>' + (isPastDay() ? 'Vergangene Tage bleiben leer, wenn nichts geplant war.' : 'Tippe auf eine freie Zeit, hol dir Aufgaben aus „Später“ oder lade eine Vorlage.') + '</p>' +
-        '<div class="row-btns"><button type="button" class="btn primary small" data-act="add">' + icon('plus') + '<span>Block hinzufügen</span></button>' +
-        '<button type="button" class="btn small" data-act="replan">' + icon('refresh') + '<span>Vorlage laden</span></button></div></section>';
+        '<p>' + (isPastDay() ? 'Vergangene Tage bleiben leer, wenn nichts geplant war.' : 'Mit „+“ legst du einen Block an – oder du lädst eine Vorlage.') + '</p>' +
+        (isPastDay() ? '' : '<div class="row-btns"><button type="button" class="btn small" data-act="replan">' + icon('refresh') + '<span>Vorlage laden</span></button></div>') + '</section>';
     }
     el.planTop.innerHTML = html;
   }
 
   el.planTop.addEventListener('click', (e) => {
-    const b = e.target.closest('[data-act],[data-energy]');
+    const b = e.target.closest('[data-act]');
     if (!b) return;
-    if (b.dataset.energy) {
-      const v = Number(b.dataset.energy);
-      mutate('Energie gespeichert.', () => { materialize(viewKey).energy = v; });
-      return;
-    }
     const act = b.dataset.act;
     if (act === 'tips-ok') { state.tipsSeen = true; save(); render(); }
-    else if (act === 'energy-reset') mutate(null, () => { materialize(viewKey).energy = null; });
-    else if (act === 'missed-hide') {
-      const n = nowMin();
-      viewDay().blocks.forEach((x) => { if (x.start + x.dur <= n) dismissedMissed.add(x.id); });
-      render();
-    } else if (act === 'missed-later') {
-      const n = nowMin();
-      mutate('In „Später“ verschoben.', () => {
-        const day = materialize(viewKey);
-        const moving = day.blocks.filter((x) => !x.done && x.start + x.dur <= n && x.type !== 'buffer' && x.type !== 'pause');
-        moving.forEach((x) => state.inbox.unshift(toInboxItem(x)));
-        day.blocks = day.blocks.filter((x) => !moving.includes(x));
-      });
-    } else if (act === 'add') openEditor({ kind: 'block' });
     else if (act === 'replan') replan();
+    else if (act.startsWith('wrap-')) wrapAction(act.slice(5));
   });
+
+  // ---------- Tagesabschluss (ohne Vorwurf) ----------
+  const WRAP_KEY = 'tagesplaner.wrapSeen';
+  const wrapSeen = () => { try { return localStorage.getItem(WRAP_KEY) === todayKey(); } catch (_) { return false; } };
+  const markWrapSeen = () => { try { localStorage.setItem(WRAP_KEY, todayKey()); } catch (_) { /* egal */ } };
+  const openItems = (k) => getDay(k).blocks.filter((b) => !b.done && b.type !== 'pause' && b.type !== 'buffer');
+  const dayEnd = (k) => getDay(k).blocks.reduce((m, b) => Math.max(m, b.start + b.dur), 0);
+  // Nach dem letzten Block des Tages, wenn noch etwas offen ist
+  function wrapDue() {
+    const k = todayKey();
+    return !wrapSeen() && getDay(k).blocks.length > 0 && nowMin() >= dayEnd(k) && openItems(k).length > 0;
+  }
+  function wrapCardHtml(cls, attr) {
+    const p = dayProgress(todayKey());
+    const n = openItems(todayKey()).length;
+    return '<section class="' + cls + '"><h2>' + icon('moon') + 'Für heute ist Schluss.</h2>' +
+      '<p><b>' + (p ? p.done + ' von ' + p.total : '0') + ' geschafft.</b> ' + (n === 1 ? 'Eine Sache ist noch offen – sie darf einfach mit.' : n + ' Sachen sind noch offen – sie dürfen einfach mit.') + ' Rest auf morgen?</p>' +
+      '<div class="row-btns"><button type="button" class="btn small primary" ' + attr + '="wrap-tomorrow">' + icon('chevron') + '<span>Auf morgen</span></button>' +
+      '<button type="button" class="btn small" ' + attr + '="wrap-later">' + icon('inbox') + '<span>Nach „Später“</span></button>' +
+      '<button type="button" class="btn small ghost" ' + attr + '="wrap-keep">So lassen</button></div></section>';
+  }
+  // Ersten freien Start finden: Wunschzeit, sonst erste Lücke im Tagesbereich, sonst hinten anhängen
+  function freeStartOn(blocks, dur, pref) {
+    const busy = (s) => blocks.some((b) => s < b.start + b.dur && b.start < s + dur);
+    if (pref != null && !busy(pref)) return pref;
+    for (let s = state.dayStart; s + dur <= state.dayEnd; s += 15) if (!busy(s)) return s;
+    const end = blocks.reduce((m, b) => Math.max(m, b.start + b.dur), state.dayStart);
+    return clamp(Math.ceil(end / 15) * 15, 0, 24 * 60 - dur);
+  }
+  function wrapAction(target) {
+    const k = todayKey();
+    if (target === 'keep') { markWrapSeen(); render(); toast('Alles klar. Schönen Feierabend!'); return; }
+    const open = openItems(k);
+    markWrapSeen();
+    if (!open.length) { render(); toast('Alles geschafft – schönen Feierabend!'); return; }
+    const tk = addDays(k, 1);
+    const again = (b, t) => b.recurId || t.blocks.some((x) => x.title === b.title && x.type === b.type);
+    let moved = 0, back = 0;
+    getDay(tk); // Morgen erzeugen, damit „kommt sowieso wieder“ erkannt wird
+    open.forEach((b) => { if (target === 'tomorrow' ? again(b, getDay(tk)) : b.recurId) back++; else moved++; });
+    const msg = (target === 'tomorrow' ? (moved ? moved + ' auf morgen gelegt.' : '') : (moved ? moved + ' in „Später“ gelegt.' : '')) +
+      (back ? ' ' + back + (back === 1 ? ' kommt' : ' kommen') + ' ohnehin wieder.' : '');
+    mutate(msg.trim() || 'Erledigt.', () => {
+      const day = materialize(k);
+      const ids = new Set(open.map((b) => b.id));
+      if (target === 'tomorrow') {
+        const t = materialize(tk);
+        open.forEach((b) => {
+          if (again(b, t)) return;
+          const c = normBlock(clone(b));
+          c.id = uid(); c.done = false; delete c.recurId;
+          c.start = freeStartOn(t.blocks, c.dur, b.start);
+          t.blocks.push(c);
+        });
+      } else {
+        open.forEach((b) => { if (!b.recurId) state.inbox.unshift(toInboxItem(b)); });
+      }
+      day.blocks = day.blocks.filter((b) => !ids.has(b.id));
+    });
+  }
+  async function wrapFromMenu() {
+    const k = todayKey();
+    const open = openItems(k);
+    const p = dayProgress(k);
+    if (!open.length) { toast(p ? 'Alles geschafft – schönen Feierabend!' : 'Heute ist nichts geplant.'); return; }
+    const v = await choose({ title: 'Tag abschließen', text: (p ? p.done + ' von ' + p.total + ' geschafft. ' : '') + 'Was offen ist, darf einfach mit.', options: [
+      { value: 'tomorrow', label: 'Rest auf morgen', desc: open.length + (open.length === 1 ? ' Block' : ' Blöcke') + ' · gleiche Uhrzeit, wenn frei', icon: 'chevron' },
+      { value: 'later', label: 'Rest nach „Später“', desc: 'Ohne Uhrzeit, wann es passt', icon: 'inbox' },
+      { value: 'keep', label: 'So lassen', icon: 'check' }] });
+    if (v) wrapAction(v);
+  }
 
   // ---------- Zeitleiste ----------
   let G = { start: 480, end: 1080, extras: [] };
@@ -748,16 +765,6 @@
     return html;
   }
 
-  function freeGaps(blocks) {
-    const iv = blocks.map((b) => [b.start, b.start + b.dur]).sort((a, b) => a[0] - b[0]);
-    const gaps = [];
-    let cur = G.start;
-    for (const [s, e] of iv) { if (s > cur) gaps.push([cur, s]); cur = Math.max(cur, e); }
-    if (G.end > cur) gaps.push([cur, G.end]);
-    const n = isToday() ? nowMin() : -1;
-    return gaps.map(([s, e]) => [Math.max(s, n > s ? Math.ceil(n / 5) * 5 : s), e]).filter(([s, e]) => e - s >= 20);
-  }
-
   function renderTimeline() {
     const blocks = viewDay().blocks;
     G = buildGeometry(blocks);
@@ -771,11 +778,6 @@
     el.grid.innerHTML = g;
     const lanes = layoutLanes(blocks);
     el.items.innerHTML = blocks.slice().sort((a, b) => a.start - b.start).map((b) => itemHtml(b, lanes.get(b.id))).join('');
-    el.gaps.innerHTML = isPastDay() ? '' : freeGaps(blocks).map(([s, e]) => {
-      const top = yA(s), h = yB(e) - top;
-      return '<button type="button" class="gap" data-start="' + s + '" data-len="' + (e - s) + '" style="top:' + (top + h / 2 - 18) + 'px">' + icon('plus') +
-        '<span>' + durText(e - s) + ' frei</span></button>';
-    }).join('');
   }
 
   function itemNode(id) { return el.items.querySelector('.item[data-id="' + id + '"]'); }
@@ -841,7 +843,6 @@
       const badge = node.querySelector('.badge');
       badge.textContent = b.done ? '' : isUp ? 'in ' + Math.ceil(until) + ' Min' : (isCur ? 'noch ' + durText(Math.ceil(end - n)) : '');
     }
-    renderSideNow();
     renderFocus();
     checkReminders();
   }
@@ -857,28 +858,6 @@
     return (h ? h + ':' + pad(m) : m) + ':' + pad(s);
   }
 
-  function renderSideNow() {
-    if (!isDesktop() || !state.role) return;
-    const { n, cur, next } = nowInfo();
-    let html = '';
-    if (cur && !cur.done) {
-      const left = cur.start + cur.dur - n;
-      html = '<div class="sn-row t-' + cur.type + '"><span class="sn-ring">' + ringSvg(left / cur.dur) + '<span class="sn-ic">' + icon(cur.icon || cur.type) + '</span></span>' +
-        '<span class="sn-text"><span class="kicker">Jetzt</span><b>' + esc(cur.title) + '</b><span>noch ' + durText(Math.ceil(left)) + ' · bis ' + fmt(cur.start + cur.dur) + '</span></span></div>';
-    } else {
-      html = '<div class="sn-row"><span class="sn-text"><span class="kicker">Jetzt</span><b>' + (next ? 'Freie Zeit' : 'Nichts mehr geplant') + '</b>' +
-        (next ? '<span>bis ' + fmt(next.start) + '</span>' : '<span>Genieß den Rest des Tages.</span>') + '</span></div>';
-    }
-    if (next) {
-      const until = Math.ceil(next.start - n);
-      html += '<div class="sn-next t-' + next.type + (until <= TRANSITION_MIN ? ' soon' : '') + '"><span class="mini-bubble">' + icon(next.icon || next.type) + '</span><span>' +
-        (until <= TRANSITION_MIN ? 'In ' + until + ' Min' : 'Um ' + fmt(next.start)) + ': <b>' + esc(next.title) + '</b></span></div>';
-    }
-    html += '<button type="button" class="btn wide" data-act="open-focus">' + icon('focus') + '<span>Fokus-Ansicht öffnen</span></button>';
-    if (html !== el.sideNow._last) { el.sideNow.innerHTML = html; el.sideNow._last = html; }
-  }
-  el.sideNow.addEventListener('click', (e) => { if (e.target.closest('[data-act="open-focus"]')) setTab('focus'); });
-
   // ---------- Fokus-Ansicht ----------
   let focusSig = '';
   function renderFocus() {
@@ -887,19 +866,22 @@
     const { n, cur, next, list } = info;
     el.focusClock.textContent = fmt(n);
     const active = cur && !cur.done ? cur : null;
-    const sig = JSON.stringify([list.length, active && [active.id, active.title, active.dur, active.start, active.subtasks], cur && cur.done && cur.id, next && [next.id, next.title, next.start], state.theme]);
+    const wrap = !next && !active && wrapDue();
+    const prog = dayProgress(info.k);
+    const sig = JSON.stringify([list.length, active && [active.id, active.title, active.type, active.icon, active.dur, active.start, active.subtasks], cur && cur.done && cur.id, next && [next.id, next.title, next.start], info.prevEnd != null, wrap, prog]);
     if (sig !== focusSig) {
       focusSig = sig;
       let html = '';
       if (!list.length) {
-        html = '<div class="focus-empty"><h2>Heute ist noch nichts geplant.</h2><p>Leg einen Block an oder lade eine Vorlage.</p>' +
-          '<button type="button" class="btn primary" data-fact="add">' + icon('plus') + '<span>Block hinzufügen</span></button></div>';
+        html = '<div class="focus-empty"><div class="celebrate calm">' + icon('sun') + '</div><h2>Heute ist noch nichts geplant.</h2><p>Das ist völlig in Ordnung. Wenn du magst, leg mit „+“ etwas an oder lade eine Vorlage.</p>' +
+          '<div class="row-btns"><button type="button" class="btn primary" data-fact="add">' + icon('plus') + '<span>Block anlegen</span></button>' +
+          '<button type="button" class="btn" data-fact="replan">' + icon('refresh') + '<span>Vorlage laden</span></button></div></div>';
       } else if (active) {
         const subs = active.subtasks;
         html = '<div class="focus-hero t-' + active.type + '">' +
           '<div class="ring-wrap">' + ringSvg(1, 'big') + '<div class="ring-center"><span class="ring-ic">' + icon(active.icon || active.type) + '</span>' +
             '<span class="ring-time" data-cd></span><span class="ring-sub">verbleibend</span></div></div>' +
-          '<span class="focus-type">' + esc(TYPES[active.type].label) + '</span>' +
+          '<span class="focus-type">' + esc(typeLabel(active.type)) + '</span>' +
           '<h2 class="focus-title">' + esc(active.title) + '</h2>' +
           '<p class="focus-range">' + fmt(active.start) + '–' + fmt(active.start + active.dur) + ' · ' + durText(active.dur) + '</p>' +
           '<div class="focus-actions"><button type="button" class="btn primary big" data-fact="done">' + icon('check') + '<span>Erledigt</span></button>' +
@@ -909,10 +891,17 @@
           '</div>';
       } else {
         const doneCur = cur && cur.done ? cur : null;
+        const before = next && info.prevEnd == null && !doneCur; // vor dem ersten Block
+        let title, text;
+        if (doneCur) { title = 'Geschafft: ' + esc(doneCur.title); text = next ? 'Durchatmen. Du musst gerade nichts.' : 'Für heute ist nichts mehr geplant.'; }
+        else if (before) { title = 'Gleich geht’s los'; text = 'Dein Tag startet um ' + fmt(next.start) + '. Bis dahin musst du nichts.'; }
+        else if (next) { title = 'Freie Zeit'; text = 'Durchatmen. Du musst gerade nichts.'; }
+        else { title = 'Feierabend'; text = prog && !wrap ? prog.done + ' von ' + prog.total + ' geschafft. Für heute ist nichts mehr geplant.' : 'Für heute ist nichts mehr geplant.'; }
         html = '<div class="focus-hero free">' +
-          (next ? '<div class="ring-wrap">' + ringSvg(1, 'big') + '<div class="ring-center"><span class="ring-ic">' + icon('sun') + '</span><span class="ring-time" data-cd></span><span class="ring-sub">bis zum nächsten Block</span></div></div>' : '<div class="celebrate">' + icon('star') + '</div>') +
-          '<h2 class="focus-title">' + (doneCur ? 'Geschafft: ' + esc(doneCur.title) : next ? 'Freie Zeit' : 'Tag geschafft!') + '</h2>' +
-          '<p class="focus-range">' + (next ? 'Durchatmen. Du musst gerade nichts.' : 'Für heute ist nichts mehr geplant. Gut gemacht.') + '</p></div>';
+          (next ? '<div class="ring-wrap">' + ringSvg(1, 'big') + '<div class="ring-center"><span class="ring-ic">' + icon(before ? 'sun' : 'pause') + '</span><span class="ring-time" data-cd></span><span class="ring-sub">bis zum nächsten Block</span></div></div>'
+            : '<div class="celebrate">' + icon('moon') + '</div>') +
+          '<h2 class="focus-title">' + title + '</h2><p class="focus-range">' + text + '</p></div>';
+        if (wrap) html += wrapCardHtml('focus-wrap', 'data-fact');
       }
       if (next) {
         html += '<div class="focus-next t-' + next.type + '" data-next><span class="mini-bubble">' + icon(next.icon || next.type) + '</span>' +
@@ -946,11 +935,13 @@
     if (!b) return;
     const { cur, k } = nowInfo();
     const act = b.dataset.fact;
-    if (act === 'add') openEditor({ kind: 'block', day: k });
+    if (act === 'add') { openEditor({ kind: 'block', day: k }); return; }
+    if (act === 'replan') { viewKey = k; replan(); return; }
+    if (act.startsWith('wrap-')) { wrapAction(act.slice(5)); return; }
     if (!cur) return;
     if (act === 'done') toggleDone(cur.id, k);
     else if (act === 'plus5') mutate('5 Minuten verlängert.', () => { const x = materialize(k).blocks.find((y) => y.id === cur.id); x.dur = Math.min(x.dur + 5, 24 * 60 - x.start); });
-    else if (act === 'edit') { viewKey = k; openEditor({ kind: 'block', id: cur.id }); }
+    else if (act === 'edit') { viewKey = k; openEditor({ kind: 'block', id: cur.id, day: k }); }
   });
   el.focusBody.addEventListener('change', (e) => {
     const cb = e.target.closest('[data-fsub]');
@@ -960,18 +951,15 @@
     mutate(null, () => { const s = materialize(k).blocks.find((y) => y.id === cur.id).subtasks.find((x) => x.id === cb.dataset.fsub); if (s) s.done = cb.checked; });
     if (cb.checked) haptic();
   });
-  $('#focus-close').addEventListener('click', () => setTab('plan'));
 
   function setTab(t) {
+    if (t !== 'plan') place = null;
     tab = t;
     focusSig = '';
-    if (t === 'focus') { viewKey = viewKey; }
     render();
-    if (t === 'plan') { if (isToday()) scrollToNow(); } else window.scrollTo(0, 0);
-    if (t === 'inbox' && !isDesktop()) setTimeout(() => $('#inbox-input').focus({ preventScroll: true }), 50);
+    if (t === 'plan') { if (isToday()) scrollToNow(); else window.scrollTo(0, 0); } else window.scrollTo(0, 0);
   }
   $$('.tab[data-tab]').forEach((t) => t.addEventListener('click', () => setTab(t.dataset.tab)));
-  $('#btn-focus-top').addEventListener('click', () => setTab(tab === 'focus' ? 'plan' : 'focus'));
 
   // ---------- Erinnerungen (lokal, opt-in) ----------
   let fired;
@@ -1043,36 +1031,25 @@
     el.tabInboxCount.hidden = !list.length;
     el.tabInboxCount.textContent = list.length > 9 ? '9+' : String(list.length);
     if (!list.length) {
-      el.inboxList.innerHTML = '<li class="inbox-empty">' + icon('inbox') + '<p><b>Dein Kopf ist frei.</b> Schreib hier alles auf, was du irgendwann erledigen willst – ganz ohne Uhrzeit.</p></li>';
+      el.inboxList.innerHTML = '<li class="inbox-empty">' + icon('inbox') + '<p><b>Dein Kopf ist frei.</b> Mit „+“ und „Später“ landet hier alles, was du irgendwann erledigen willst – ganz ohne Uhrzeit.</p></li>';
       return;
     }
     el.inboxList.innerHTML = list.map((b) =>
       '<li class="ib t-' + b.type + '" data-id="' + b.id + '">' +
-        '<span class="ib-bubble" data-ib-grip title="Auf die Zeitleiste ziehen">' + icon(b.icon || b.type) + '</span>' +
-        '<button type="button" class="ib-main" data-ib="edit"><b>' + esc(b.title) + '</b><small>' + durText(b.dur) + ' · ' + esc(TYPES[b.type].label) + (b.subtasks.length ? ' · ' + b.subtasks.length + ' Unteraufg.' : '') + '</small></button>' +
+        '<span class="ib-bubble">' + icon(b.icon || b.type) + '</span>' +
+        '<button type="button" class="ib-main" data-ib="edit"><b>' + esc(b.title) + '</b><small>' + durText(b.dur) + ' · ' + esc(typeLabel(b.type)) + (b.subtasks.length ? ' · ' + b.subtasks.length + ' Unteraufg.' : '') + '</small></button>' +
         '<button type="button" class="btn small ib-plan" data-ib="plan" aria-label="' + esc(b.title) + ' einplanen">' + icon('calendar') + '<span>Einplanen</span></button>' +
         '<button type="button" class="check" data-ib="done" aria-label="Erledigt: ' + esc(b.title) + '">' + icon('check') + '</button>' +
       '</li>').join('');
   }
 
-  $('#inbox-add').addEventListener('submit', (e) => {
-    e.preventDefault();
-    const inp = $('#inbox-input');
-    const title = inp.value.trim();
-    if (!title) return;
-    mutate('In „Später“ abgelegt.', () => { state.inbox.unshift(normBlock({ title, type: 'flexible', dur: 30 })); });
-    inp.value = '';
-    $('#inbox-input').focus({ preventScroll: true });
-  });
-
   el.inboxList.addEventListener('click', (e) => {
-    if (suppressClick) return;
     const b = e.target.closest('[data-ib]');
     if (!b) return;
     const id = b.closest('.ib').dataset.id;
     const act = b.dataset.ib;
     if (act === 'edit') openEditor({ kind: 'inbox', id });
-    else if (act === 'plan') scheduleInbox(id);
+    else if (act === 'plan') startPlace(id);
     else if (act === 'done') {
       const li = b.closest('.ib');
       li.classList.add('just-done');
@@ -1094,6 +1071,7 @@
   }
   function scheduleInbox(id, start, day) {
     const item = state.inbox.find((x) => x.id === id);
+    place = null;
     if (!item) return;
     const k = day || targetDayForScheduling();
     const s = start != null ? start : suggestStart(item.dur, k);
@@ -1104,7 +1082,7 @@
       materialize(k).blocks.push(b);
       state.inbox = state.inbox.filter((x) => x.id !== id);
       viewKey = k;
-      if (!isDesktop()) tab = 'plan';
+      tab = 'plan';
     });
     scrollToItem(newId);
   }
@@ -1201,12 +1179,6 @@
     inp && inp.focus({ preventScroll: true });
   });
   el.items.addEventListener('contextmenu', (e) => { if (e.target.closest('.item') && !e.target.closest('input')) e.preventDefault(); });
-  el.gaps.addEventListener('click', (e) => {
-    const g = e.target.closest('.gap');
-    if (!g) return;
-    openEditor({ kind: 'block', start: Number(g.dataset.start), dur: Math.min(30, Number(g.dataset.len)) });
-  });
-
   // Tastatur auf Karten
   el.items.addEventListener('keydown', (e) => {
     const card = e.target.classList && e.target.classList.contains('card') ? e.target : null;
@@ -1233,7 +1205,7 @@
   const minDur = () => Math.max(10, state.snap);
 
   // ==================================================================
-  // Ziehen: Blöcke verschieben / Dauer ändern / Aufgaben aus „Später“ einplanen
+  // Ziehen: Blöcke verschieben / Dauer ändern
   //  Maus: ziehen ab 5 px · Touch: lange drücken oder sofort am Symbol (Bubble) ziehen
   // ==================================================================
   let drag = null;
@@ -1248,48 +1220,25 @@
     if (!b) return;
     const onResize = !!e.target.closest('.resize');
     const onGrip = !!e.target.closest('[data-grip]');
-    startPointer(e, { kind: 'block', id: b.id, node: item, mode: onResize ? 'resize' : 'move', orig: { start: b.start, dur: b.dur }, immediate: onResize || onGrip });
-  });
-
-  el.inboxList.addEventListener('pointerdown', (e) => {
-    if (drag || !isDesktop() || (e.pointerType === 'mouse' && e.button !== 0)) return;
-    const li = e.target.closest('.ib');
-    if (!li) return;
-    const onGrip = !!e.target.closest('[data-ib-grip]');
-    if (!onGrip && (e.pointerType !== 'mouse' || e.target.closest('.check, .ib-plan'))) return;
-    const item = state.inbox.find((x) => x.id === li.dataset.id);
-    if (!item) return;
-    startPointer(e, { kind: 'inbox', id: item.id, node: li, mode: 'inbox', dur: item.dur, immediate: onGrip });
-  });
-
-  function startPointer(e, d) {
-    drag = Object.assign(d, { pid: e.pointerId, ptype: e.pointerType, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, s0: window.scrollY, active: false, timer: null, raf: 0, cur: d.orig ? Object.assign({}, d.orig) : null });
-    if (d.immediate) { e.preventDefault(); activateDrag(); }
+    drag = { id: b.id, node: item, mode: onResize ? 'resize' : 'move', orig: { start: b.start, dur: b.dur }, cur: { start: b.start, dur: b.dur },
+      pid: e.pointerId, ptype: e.pointerType, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, s0: window.scrollY, active: false, timer: null, raf: 0 };
+    if (onResize || onGrip) { e.preventDefault(); activateDrag(); }
     else if (e.pointerType === 'touch') {
-      d.node.classList.add('pressing');
+      const d = drag;
+      item.classList.add('pressing');
       d.timer = setTimeout(() => { if (drag === d && !d.active) { activateDrag(); haptic(); } }, LONG_PRESS_MS);
     }
-    if (e.pointerType !== 'touch') { try { d.node.setPointerCapture(e.pointerId); } catch (_) { /* egal */ } }
-  }
+    if (e.pointerType !== 'touch') { try { item.setPointerCapture(e.pointerId); } catch (_) { /* egal */ } }
+  });
 
   function activateDrag() {
     const d = drag;
     clearTimeout(d.timer);
     d.active = true;
     d.node.classList.remove('pressing');
-    if (openIds.size) { openIds.clear(); renderTimeline(); updateLive(); if (d.kind === 'block') d.node = itemNode(d.id); }
-    if (d.kind === 'block') {
-      d.node.classList.remove('upcoming');
-      d.node.classList.add('dragging', d.mode === 'resize' ? 'is-resizing' : 'is-moving');
-    } else {
-      const r = d.node.getBoundingClientRect();
-      d.ghost = d.node.cloneNode(true);
-      d.ghost.classList.add('ib-ghost');
-      d.ghost.style.width = r.width + 'px';
-      d.offX = d.x0 - r.left; d.offY = d.y0 - r.top;
-      document.body.appendChild(d.ghost);
-      d.node.classList.add('lifting');
-    }
+    if (openIds.size) { openIds.clear(); renderTimeline(); updateLive(); d.node = itemNode(d.id); }
+    d.node.classList.remove('upcoming');
+    d.node.classList.add('dragging', d.mode === 'resize' ? 'is-resizing' : 'is-moving');
     document.body.classList.add('is-dragging');
     applyDrag();
     d.raf = requestAnimationFrame(autoScroll);
@@ -1311,53 +1260,31 @@
   window.addEventListener('pointercancel', (e) => endPointer(e, true));
   document.addEventListener('touchmove', (e) => { if (drag && drag.active) e.preventDefault(); }, { passive: false });
 
-  const inside = (node, x, y) => { const r = node.getBoundingClientRect(); return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom; };
-
   function applyDrag() {
     const d = drag;
     const step = state.snap;
-    if (d.kind === 'block') {
-      const dm = ((d.y - d.y0) + (window.scrollY - d.s0)) / PPM;
-      if (d.mode === 'move') {
-        d.cur.start = clamp(Math.round((d.orig.start + dm) / step) * step, G.start, G.end - d.orig.dur);
-        d.node.style.top = yA(d.cur.start) + 'px';
-        d.overInbox = isDesktop() && inside(el.inbox, d.x, d.y);
-        d.node.classList.toggle('to-inbox', d.overInbox);
-        el.inbox.classList.toggle('drop-target', d.overInbox);
-      } else {
-        const end = clamp(Math.round((d.orig.start + d.orig.dur + dm) / step) * step, d.orig.start + minDur(), G.end);
-        d.cur.dur = end - d.orig.start;
-        d.node.style.height = (d.cur.dur * PPM) + 'px';
-      }
-      const t = d.node.querySelector('.card-time');
-      if (t) t.textContent = fmt(d.cur.start) + '–' + fmt(d.cur.start + d.cur.dur);
-      const dd = d.node.querySelector('.card-dur');
-      if (dd) dd.textContent = ' · ' + durText(d.cur.dur);
-      const badge = d.node.querySelector('.badge');
-      if (badge) badge.textContent = d.overInbox ? 'Später' : d.mode === 'resize' ? durText(d.cur.dur) : fmt(d.cur.start);
+    const dm = ((d.y - d.y0) + (window.scrollY - d.s0)) / PPM;
+    if (d.mode === 'move') {
+      d.cur.start = clamp(Math.round((d.orig.start + dm) / step) * step, G.start, G.end - d.orig.dur);
+      d.node.style.top = yA(d.cur.start) + 'px';
     } else {
-      d.ghost.style.transform = 'translate(' + (d.x - d.offX) + 'px,' + (d.y - d.offY) + 'px) rotate(-1.5deg)';
-      const r = el.timeline.getBoundingClientRect();
-      if (d.x >= r.left && d.x <= r.right && d.y >= r.top && d.y <= r.bottom) {
-        const t = G.start + (d.y - r.top - TOP_PAD) / PPM - Math.min(d.dur, 30) / 2;
-        const s = clamp(Math.round(t / step) * step, G.start, G.end - d.dur);
-        d.dropStart = s;
-        el.dropPreview.hidden = false;
-        el.dropPreview.style.top = (TOP_PAD + yA(s)) + 'px';
-        el.dropPreview.style.height = (d.dur * PPM) + 'px';
-        el.dropPreview.firstChild.textContent = fmt(s) + '–' + fmt(s + d.dur);
-      } else {
-        d.dropStart = null;
-        el.dropPreview.hidden = true;
-      }
+      const end = clamp(Math.round((d.orig.start + d.orig.dur + dm) / step) * step, d.orig.start + minDur(), G.end);
+      d.cur.dur = end - d.orig.start;
+      d.node.style.height = (d.cur.dur * PPM) + 'px';
     }
+    const t = d.node.querySelector('.card-time');
+    if (t) t.textContent = fmt(d.cur.start) + '–' + fmt(d.cur.start + d.cur.dur);
+    const dd = d.node.querySelector('.card-dur');
+    if (dd) dd.textContent = ' · ' + durText(d.cur.dur);
+    const badge = d.node.querySelector('.badge');
+    if (badge) badge.textContent = d.mode === 'resize' ? durText(d.cur.dur) : fmt(d.cur.start);
   }
 
   function autoScroll() {
     if (!drag || !drag.active) return;
     const edge = 80;
     const bar = $('.tabbar');
-    const inset = getComputedStyle(bar).display !== 'none' ? bar.offsetHeight : 0;
+    const inset = bar.getBoundingClientRect().top > window.innerHeight / 2 ? bar.offsetHeight : 0; // mobil: Leiste unten
     const top = $('.topbar').offsetHeight + 10;
     const bottom = window.innerHeight - inset - edge;
     let v = 0;
@@ -1374,35 +1301,79 @@
     clearTimeout(d.timer);
     cancelAnimationFrame(d.raf);
     document.body.classList.remove('is-dragging');
-    el.inbox.classList.remove('drop-target');
-    el.dropPreview.hidden = true;
-    if (d.ghost) d.ghost.remove();
-    d.node.classList.remove('pressing', 'dragging', 'is-moving', 'is-resizing', 'lifting', 'to-inbox');
+    d.node.classList.remove('pressing', 'dragging', 'is-moving', 'is-resizing');
     const moved = Math.hypot(e.clientX - d.x0, e.clientY - d.y0);
     if (d.active) {
       suppressClick = true;
       setTimeout(() => { suppressClick = false; }, 80);
       if (cancelled) { render(); return; }
-      if (d.kind === 'block') {
-        if (d.overInbox) { blockToLater(d.id); return; }
-        const b = findBlock(d.id);
-        if (!b || (b.start === d.cur.start && b.dur === d.cur.dur)) {
-          render();
-          if (moved < 6 && d.mode === 'move') openEditor({ kind: 'block', id: d.id }); // Antippen der Bubble
-          return;
-        }
-        mutate(d.mode === 'resize' ? 'Dauer: ' + durText(d.cur.dur) + '.' : 'Verschoben auf ' + fmt(d.cur.start) + '.', () => {
-          const x = materialize(viewKey).blocks.find((y) => y.id === d.id);
-          x.start = d.cur.start; x.dur = d.cur.dur;
-        });
-        announce(fmt(d.cur.start) + ' bis ' + fmt(d.cur.start + d.cur.dur));
-      } else if (d.dropStart != null) {
-        scheduleInbox(d.id, d.dropStart, viewKey);
-      } else render();
-    } else if (!cancelled && d.kind === 'block' && moved < 8) {
+      const b = findBlock(d.id);
+      if (!b || (b.start === d.cur.start && b.dur === d.cur.dur)) {
+        render();
+        if (moved < 6 && d.mode === 'move') openEditor({ kind: 'block', id: d.id }); // Antippen der Bubble
+        return;
+      }
+      mutate(d.mode === 'resize' ? 'Dauer: ' + durText(d.cur.dur) + '.' : 'Verschoben auf ' + fmt(d.cur.start) + '.', () => {
+        const x = materialize(viewKey).blocks.find((y) => y.id === d.id);
+        x.start = d.cur.start; x.dur = d.cur.dur;
+      });
+      announce(fmt(d.cur.start) + ' bis ' + fmt(d.cur.start + d.cur.dur));
+    } else if (!cancelled && moved < 8) {
       openEditor({ kind: 'block', id: d.id }); // Tippen = bearbeiten
     }
   }
+
+  // ==================================================================
+  // Einplanen per Tippen: Aufgabe aus „Später“ → Uhrzeit im Plan antippen
+  // ==================================================================
+  function startPlace(id) {
+    const it = state.inbox.find((x) => x.id === id);
+    if (!it) return;
+    place = { id, title: it.title, dur: it.dur };
+    if (isPastDay()) viewKey = todayKey();
+    tab = 'plan';
+    openIds.clear();
+    focusSig = '';
+    render();
+    if (isToday()) scrollToNow(); else window.scrollTo(0, 0);
+    announce('Tippe im Plan auf eine Uhrzeit für ' + it.title + ' – oder wähle die nächste freie Lücke.');
+  }
+  function endPlace() { place = null; render(); }
+  function renderPlace() {
+    const on = !!place && tab === 'plan';
+    const can = on && !isPastDay();
+    document.body.classList.toggle('placing', on);
+    el.placeLayer.hidden = !can;
+    el.placeBar.hidden = !on;
+    if (!on) { el.dropPreview.hidden = true; return; }
+    $('#place-text').innerHTML = can
+      ? '<b>„' + esc(place.title) + '“</b> einplanen: Tippe im Plan auf eine Uhrzeit.'
+      : 'Vergangene Tage lassen sich nicht planen – wähle oben heute oder einen kommenden Tag.';
+    const nb = $('#place-next');
+    nb.hidden = !can;
+    if (can) {
+      const s = suggestStart(place.dur, viewKey);
+      nb.dataset.start = s;
+      nb.querySelector('span').textContent = 'Nächste Lücke · ' + fmt(s);
+    }
+  }
+  function placeStartAt(clientY) {
+    const r = el.timeline.getBoundingClientRect();
+    const t = G.start + (clientY - r.top - TOP_PAD) / PPM;
+    return clamp(Math.floor(t / 15) * 15, G.start, Math.max(G.start, Math.min(G.end, 24 * 60) - place.dur));
+  }
+  el.placeLayer.addEventListener('pointermove', (e) => {
+    if (!place || e.pointerType !== 'mouse') return;
+    const s = placeStartAt(e.clientY);
+    el.dropPreview.hidden = false;
+    el.dropPreview.style.top = (TOP_PAD + yA(s)) + 'px';
+    el.dropPreview.style.height = (place.dur * PPM) + 'px';
+    el.dropPreview.firstChild.textContent = fmt(s) + '–' + fmt(s + place.dur);
+  });
+  el.placeLayer.addEventListener('pointerleave', () => { el.dropPreview.hidden = true; });
+  el.placeLayer.addEventListener('click', (e) => { if (place) scheduleInbox(place.id, placeStartAt(e.clientY), viewKey); });
+  $('#place-next').addEventListener('click', (e) => { if (place) scheduleInbox(place.id, Number(e.currentTarget.dataset.start), viewKey); });
+  $('#place-cancel').addEventListener('click', () => { endPlace(); announce('Einplanen abgebrochen.'); });
 
   // ==================================================================
   // Editor
@@ -1411,15 +1382,17 @@
   const f = {
     name: $('#ed-name'), iconBtn: $('#ed-icon-btn'), icons: $('#ed-icons'), types: $('#ed-types'),
     h: $('#ed-h'), m: $('#ed-m'), dur: $('#ed-dur'), chips: $('#ed-chips'), end: $('#ed-end'),
-    repeat: $('#ed-repeat'), subs: $('#ed-subs'),
+    repeat: $('#ed-repeat'), subs: $('#ed-subs'), typesMore: $('#ed-types-more'), moreTypes: $('#ed-more-types'),
+    detail: $('#ed-detail'), startField: $('#ed-start-field'),
     del: $('#ed-delete'), dup: $('#ed-dup'), later: $('#ed-later'), sched: $('#ed-schedule')
   };
-  f.types.innerHTML = TYPE_ORDER.map((t) =>
-    '<label class="type-opt t-' + t + '"><input type="radio" name="type" value="' + t + '"><span class="type-sw">' + icon(t) + '</span><span class="type-name">' + esc(TYPES[t].label) + '</span></label>').join('');
+  const typeOpt = (t) => '<label class="type-opt t-' + t + '"' + (SIMPLE[t] ? ' title="' + esc(TYPES[t].label) + '"' : '') + '><input type="radio" name="type" value="' + t + '"><span class="type-sw">' + icon(t) + '</span><span class="type-name">' + esc(typeLabel(t)) + '</span></label>';
+  f.types.innerHTML = MAIN_TYPES.map(typeOpt).join('');
+  f.typesMore.innerHTML = TYPE_ORDER.filter((t) => !SIMPLE[t]).map(typeOpt).join('');
   f.icons.innerHTML = '<button type="button" class="ic-opt" data-ic="" role="radio" aria-label="Symbol der Art">' + '<span class="auto-lbl">Auto</span></button>' +
     PICKABLE.map((n) => '<button type="button" class="ic-opt" data-ic="' + n + '" role="radio" aria-label="Symbol ' + n + '">' + icon(n) + '</button>').join('');
   f.h.innerHTML = Array.from({ length: 24 }, (_, i) => '<option value="' + i + '">' + pad(i) + '</option>').join('');
-  f.chips.innerHTML = [5, 15, 30, 45, 60, 90].map((m) => '<button type="button" class="chip" data-min="' + m + '">' + durText(m) + '</button>').join('');
+  f.chips.innerHTML = [5, 15, 30, 60].map((m) => '<button type="button" class="chip" data-min="' + m + '">' + durText(m) + '</button>').join('');
 
   function openEditor(o) {
     const k = o.day || viewKey;
@@ -1427,20 +1400,15 @@
     if (o.kind === 'block' && o.id) src = getDay(k).blocks.find((x) => x.id === o.id);
     if (o.kind === 'inbox' && o.id) src = state.inbox.find((x) => x.id === o.id);
     const dur = o.dur || 30;
-    const draft = src ? clone(src) : normBlock({ type: o.kind === 'inbox' ? 'flexible' : 'focused', start: o.start != null ? o.start : suggestStart(dur, k), dur });
+    const draft = src ? clone(src) : normBlock({ type: o.kind === 'inbox' ? 'quick' : 'deep', start: o.start != null ? o.start : suggestStart(dur, k), dur });
     if (!src) draft.title = '';
-    ed = { kind: o.kind, id: src ? src.id : null, day: k, draft };
-    const isBlock = o.kind === 'block';
-    $('#ed-title').textContent = isBlock ? (src ? 'Block bearbeiten' : 'Neuer Block' + (k !== todayKey() ? ' · ' + relName(k) : '')) : (src ? 'Aufgabe für später' : 'Neue Aufgabe für später');
+    ed = { kind: o.kind, id: src ? src.id : null, day: k, draft, isNew: !src, autoStart: !src && o.start == null };
     f.name.value = draft.title;
-    f.name.placeholder = isBlock ? 'Was hast du vor?' : 'Was willst du irgendwann erledigen?';
-    f.types.querySelector('input[value="' + draft.type + '"]').checked = true;
-    $('#ed-time-row').hidden = !isBlock;
-    $('#ed-repeat-field').hidden = !isBlock;
-    f.del.hidden = !src;
-    f.dup.hidden = !(isBlock && src);
-    f.later.hidden = !(isBlock && src);
-    f.sched.hidden = !(!isBlock && src);
+    $('#ed-form input[name="type"][value="' + draft.type + '"]').checked = true;
+    setMoreTypes(!SIMPLE[draft.type]);
+    $$('input[name="when"]', el.editor).forEach((r) => { r.checked = r.value === o.kind; });
+    $('#ed-when').hidden = !!src;
+    f.detail.open = !!src && o.kind === 'block';
     f.icons.hidden = true;
     f.iconBtn.setAttribute('aria-expanded', 'false');
     const wd = WD_LONG[weekday(k)];
@@ -1449,12 +1417,37 @@
     f.repeat.value = series ? series.rule : 'none';
     renderTimePick();
     renderEdIcon();
-    renderDur();
     renderEditSubs();
+    syncKind();
     el.editor.showModal();
     f.name.blur();
     if (!src) setTimeout(() => f.name.focus(), 60);
   }
+  function syncKind() {
+    const isBlock = ed.kind === 'block', existing = !ed.isNew;
+    $('#ed-title').textContent = ed.isNew
+      ? (isBlock ? 'Neu' + (ed.day !== todayKey() ? ' · ' + relName(ed.day) : '') : 'Neu für später')
+      : (isBlock ? 'Block bearbeiten' : 'Aufgabe für später');
+    f.name.placeholder = isBlock ? 'Was hast du vor?' : 'Was willst du irgendwann erledigen?';
+    f.startField.hidden = !isBlock;
+    $('#ed-repeat-field').hidden = !isBlock;
+    f.del.hidden = !existing;
+    f.dup.hidden = !(isBlock && existing);
+    f.later.hidden = !(isBlock && existing);
+    f.sched.hidden = !(!isBlock && existing);
+    renderDur();
+  }
+  function setMoreTypes(show) {
+    f.typesMore.hidden = !show;
+    f.moreTypes.setAttribute('aria-expanded', String(show));
+    f.moreTypes.textContent = show ? 'Weniger Typen' : 'Mehr Typen';
+  }
+  f.moreTypes.addEventListener('click', () => setMoreTypes(f.typesMore.hidden));
+  $('#ed-when').addEventListener('change', (e) => {
+    ed.kind = e.target.value;
+    if (ed.kind === 'block' && ed.autoStart) { ed.draft.start = suggestStart(ed.draft.dur, ed.day); renderTimePick(); }
+    syncKind();
+  });
 
   function renderEdIcon() {
     const d = ed.draft;
@@ -1476,7 +1469,7 @@
     f.iconBtn.setAttribute('aria-expanded', 'false');
     f.iconBtn.focus();
   });
-  f.types.addEventListener('change', (e) => { ed.draft.type = e.target.value; renderEdIcon(); });
+  [f.types, f.typesMore].forEach((g) => g.addEventListener('change', (e) => { ed.draft.type = e.target.value; renderEdIcon(); }));
 
   function renderTimePick() {
     const s = ed.draft.start;
@@ -1487,24 +1480,26 @@
     f.m.value = String(s % 60);
   }
   const readStart = () => Number(f.h.value) * 60 + Number(f.m.value);
-  [f.h, f.m].forEach((s) => s.addEventListener('change', () => { ed.draft.start = readStart(); renderDur(); }));
+  [f.h, f.m].forEach((s) => s.addEventListener('change', () => { ed.draft.start = readStart(); ed.autoStart = false; renderDur(); }));
 
   function renderDur() {
     const d = ed.draft;
     f.dur.textContent = durText(d.dur);
     const s = readStart();
-    f.end.textContent = ed.kind === 'block' ? 'Ende: ' + fmt(Math.min(s + d.dur, 24 * 60)) + ' Uhr' : 'Geschätzte Dauer, wenn du die Aufgabe einplanst.';
+    f.end.textContent = ed.kind === 'block'
+      ? fmt(s) + '–' + fmt(Math.min(s + d.dur, 24 * 60)) + ' Uhr' + (ed.autoStart ? ' · nächste freie Lücke' : '') + ' · Uhrzeit unter „Genauer“'
+      : 'Ohne Uhrzeit – du planst es ein, wenn es passt.';
     $$('.chip', f.chips).forEach((c) => c.setAttribute('aria-pressed', String(Number(c.dataset.min) === d.dur)));
   }
-  $$('[data-dur]', el.editor).forEach((btn) => btn.addEventListener('click', () => {
-    ed.draft.dur = clamp(ed.draft.dur + Number(btn.dataset.dur) * 5, 5, 12 * 60);
+  function setDur(v) {
+    ed.draft.dur = v;
+    if (ed.autoStart && ed.kind === 'block') { ed.draft.start = suggestStart(v, ed.day); renderTimePick(); }
     renderDur();
-  }));
+  }
+  $$('[data-dur]', el.editor).forEach((btn) => btn.addEventListener('click', () => setDur(clamp(ed.draft.dur + Number(btn.dataset.dur) * 5, 5, 12 * 60))));
   f.chips.addEventListener('click', (e) => {
     const c = e.target.closest('.chip');
-    if (!c) return;
-    ed.draft.dur = Number(c.dataset.min);
-    renderDur();
+    if (c) setDur(Number(c.dataset.min));
   });
 
   function renderEditSubs() {
@@ -1636,8 +1631,8 @@
     const id = ed.id;
     el.editor.close();
     const i = state.inbox.findIndex((x) => x.id === id);
-    if (i >= 0) state.inbox[i] = nb;
-    scheduleInbox(id);
+    if (i >= 0 && JSON.stringify(state.inbox[i]) !== JSON.stringify(nb)) mutate(null, () => { state.inbox[i] = nb; });
+    startPlace(id);
   });
   f.del.addEventListener('click', async () => {
     const id = ed.id, k = ed.day;
@@ -1671,7 +1666,7 @@
   // Mehr / Einstellungen
   // ==================================================================
   $('#legend').innerHTML = TYPE_ORDER.map((t) =>
-    '<li class="t-' + t + '"><span class="mini-bubble">' + icon(t) + '</span><span><b>' + esc(TYPES[t].label) + '</b><small>' + esc(TYPES[t].hint) + '</small></span></li>').join('');
+    '<li class="t-' + t + '"><span class="mini-bubble">' + icon(t) + '</span><span><b>' + esc(typeLabel(t)) + (SIMPLE[t] ? ' <small>(' + esc(TYPES[t].label) + ')</small>' : '') + '</b><small>' + esc(TYPES[t].hint) + '</small></span></li>').join('');
   const s = {
     newDay: $('#s-newday'), contrast: $('#s-contrast'), start: $('#s-start'), end: $('#s-end'),
     sound: $('#s-sound'), vibrate: $('#s-vibrate'), notify: $('#s-notify')
@@ -1693,10 +1688,26 @@
     s.notify.checked = state.reminders.notify && 'Notification' in window && Notification.permission === 'granted';
     $('#s-notify-hint').textContent = !('Notification' in window) ? 'Dieser Browser unterstützt keine Benachrichtigungen.'
       : Notification.permission === 'denied' ? 'Im Browser blockiert – bitte in den Website-Einstellungen erlauben.'
-      : 'Funktioniert, solange die App geöffnet ist (auch im Hintergrund).';
-    $('#s-role').textContent = ROLES[state.role].name;
+      : 'Auch wenn die App im Hintergrund ist.';
+    $('#s-role').textContent = 'Aktuell: ' + ROLES[state.role].name;
+    renderEnergy();
     el.more.showModal();
   }
+  // Energie-Check-in (optional, nur heute)
+  function renderEnergy() {
+    const en = getDay(todayKey()).energy;
+    $('#m-energy').innerHTML = ENERGY.map((e) => '<button type="button" class="en-btn en-' + e.v + '" data-energy="' + e.v + '" aria-pressed="' + (en === e.v) + '">' + batteryIcon(e.v) + '<span>' + e.label + '</span></button>').join('');
+    $('#m-energy-tip').textContent = en ? ENERGY[en - 1].tip : 'Hilft dir, den Tag passend zu deiner Kraft zu planen.';
+  }
+  $('#m-energy').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-energy]');
+    if (!b) return;
+    const v = Number(b.dataset.energy);
+    const k = todayKey();
+    mutate(null, () => { const d = materialize(k); d.energy = d.energy === v ? null : v; });
+    renderEnergy();
+    announce('Energie: ' + (getDay(k).energy ? ENERGY[v - 1].label : 'zurückgesetzt'));
+  });
   function fillEnd() {
     const st = Number(s.start.value);
     let html = '';
@@ -1705,7 +1716,6 @@
     s.end.value = String(Math.max(state.dayEnd, st + 120));
   }
   $('#btn-more').addEventListener('click', openMore);
-  $('#btn-more-top').addEventListener('click', openMore);
 
   el.more.addEventListener('change', async (e) => {
     const t = e.target;
@@ -1734,9 +1744,8 @@
   $('#s-role-btn').addEventListener('click', () => { el.more.close(); showOnboarding(true); });
   $('#m-replan').addEventListener('click', () => { el.more.close(); replan(); });
   $('#m-save-tpl').addEventListener('click', () => { el.more.close(); saveTemplate(); });
-  $('#btn-replan').addEventListener('click', replan);
-  $('#btn-replan-side').addEventListener('click', replan);
-  $('#btn-save-tpl').addEventListener('click', saveTemplate);
+  $('#m-wrap').addEventListener('click', () => { el.more.close(); wrapFromMenu(); });
+  $('#m-ics').addEventListener('click', () => { el.more.close(); exportIcs(); });
 
   async function replan() {
     const k = viewKey;
@@ -1749,7 +1758,6 @@
       const en = (state.days[k] || {}).energy || null;
       state.days[k] = { blocks: baseBlocks(v).concat(recurringFor(k)), energy: en };
       openIds.clear();
-      dismissPast(k);
     });
     if (isToday()) scrollToNow();
   }
@@ -1767,16 +1775,73 @@
   }
 
   // ---------- Sicherung ----------
-  $('#s-export').addEventListener('click', () => {
-    const blob = new Blob([JSON.stringify({ app: 'tagesplaner', version: 2, exportedAt: new Date().toISOString(), data: state }, null, 2)], { type: 'application/json' });
+  function downloadFile(name, type, text) {
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'tagesplaner-sicherung-' + todayKey() + '.json';
+    a.href = URL.createObjectURL(new Blob([text], { type }));
+    a.download = name;
     document.body.appendChild(a);
     a.click();
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
+  $('#s-export').addEventListener('click', () => {
+    downloadFile('tagesplaner-sicherung-' + todayKey() + '.json', 'application/json',
+      JSON.stringify({ app: 'tagesplaner', version: 2, exportedAt: new Date().toISOString(), data: state }, null, 2));
     toast('Sicherung heruntergeladen.');
   });
+
+  // ---------- Kalender-Export (.ics, mit Erinnerung 10 Min vorher) ----------
+  const icsEsc = (v) => String(v).replace(/\\/g, '\\\\').replace(/\r?\n/g, '\\n').replace(/([,;])/g, '\\$1');
+  const icsUtc = (d) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  function icsFold(line) {
+    // Zeilen nach RFC 5545 auf 75 Oktette umbrechen (UTF-8-sicher)
+    const enc = new TextEncoder();
+    const parts = [];
+    let cur = '', len = 0, max = 75;
+    for (const ch of line) {
+      const l = enc.encode(ch).length;
+      if (len + l > max) { parts.push(cur); cur = ''; len = 0; max = 74; }
+      cur += ch; len += l;
+    }
+    parts.push(cur);
+    return parts.join('\r\n ');
+  }
+  function hash(str) { let h = 5381; for (let i = 0; i < str.length; i++) h = ((h * 33) ^ str.charCodeAt(i)) >>> 0; return h.toString(36); }
+  function buildIcs(keys) {
+    const stamp = icsUtc(new Date());
+    const L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//micana//Tagesplaner//DE', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'X-WR-CALNAME:Tagesplaner'];
+    let count = 0;
+    keys.forEach((k) => {
+      const n = k === todayKey() ? nowMin() : -1;
+      getDay(k).blocks.slice().sort((a, b) => a.start - b.start).forEach((b) => {
+        if (b.done || b.type === 'buffer' || b.start + b.dur <= n) return;
+        const st = keyToDate(k); st.setMinutes(b.start);
+        const en = keyToDate(k); en.setMinutes(b.start + b.dur);
+        const desc = [typeLabel(b.type)].concat(b.subtasks.map((x) => '– ' + x.text)).join('\n') + '\nAus dem Tagesplaner (planner.micana.de)';
+        L.push('BEGIN:VEVENT',
+          'UID:' + k.replace(/-/g, '') + '-' + b.start + '-' + hash(b.title + '|' + b.type) + '@planner.micana.de',
+          'DTSTAMP:' + stamp, 'DTSTART:' + icsUtc(st), 'DTEND:' + icsUtc(en),
+          'SUMMARY:' + icsEsc(b.title), 'DESCRIPTION:' + icsEsc(desc), 'CATEGORIES:' + icsEsc(typeLabel(b.type)),
+          'TRANSP:' + (b.type === 'pause' ? 'TRANSPARENT' : 'OPAQUE'),
+          'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:' + icsEsc('In 10 Min: ' + b.title), 'TRIGGER:-PT10M', 'END:VALARM',
+          'END:VEVENT');
+        count++;
+      });
+    });
+    L.push('END:VCALENDAR');
+    return { text: L.map(icsFold).join('\r\n') + '\r\n', count };
+  }
+  async function exportIcs() {
+    const tk = todayKey();
+    const week = Array.from({ length: 7 }, (_, i) => addDays(tk, i));
+    const v = await choose({ title: 'In Kalender übernehmen', text: 'Du bekommst eine .ics-Datei. Öffne sie, um die Blöcke in deinen Kalender zu übernehmen – dein Kalender erinnert dich dann 10 Min vorher, auch wenn diese App zu ist.', options: [
+      { value: 'today', label: 'Heute', desc: buildIcs([tk]).count + ' Blöcke ab jetzt', icon: 'calendar' },
+      { value: 'week', label: 'Die nächsten 7 Tage', desc: buildIcs(week).count + ' Blöcke', icon: 'repeat' }] });
+    if (!v) return;
+    const res = buildIcs(v === 'today' ? [tk] : week);
+    if (!res.count) { toast('Nichts zu übernehmen – heute ist nichts mehr offen.'); return; }
+    downloadFile('tagesplaner-' + (v === 'today' ? tk : 'woche-' + tk) + '.ics', 'text/calendar;charset=utf-8', res.text);
+    toast(res.count + ' Blöcke als Kalender-Datei gespeichert.');
+  }
   $('#s-import').addEventListener('click', () => $('#s-import-file').click());
   $('#s-import-file').addEventListener('change', async (e) => {
     const file = e.target.files && e.target.files[0];
@@ -1812,14 +1877,18 @@
   // ==================================================================
   // Globale Aktionen
   // ==================================================================
-  function addNew() { openEditor({ kind: tab === 'inbox' ? 'inbox' : 'block', day: tab === 'focus' ? todayKey() : viewKey }); }
+  // Ein Weg zum Anlegen: der große „+“-Knopf
+  function addNew() {
+    place = null;
+    renderPlace();
+    openEditor({ kind: tab === 'inbox' ? 'inbox' : 'block', day: tab === 'plan' && !isPastDay() ? viewKey : todayKey() });
+  }
   $('#fab').addEventListener('click', addNew);
-  $('#btn-add-side').addEventListener('click', () => openEditor({ kind: 'block' }));
 
   document.addEventListener('keydown', (e) => {
     const typing = /INPUT|TEXTAREA|SELECT/.test((e.target.tagName || '')) || document.querySelector('dialog[open]');
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey && !typing) { e.preventDefault(); undo(); }
-    else if (e.key === 'Escape' && tab === 'focus' && !typing) setTab('plan');
+    else if (e.key === 'Escape' && place && !typing) endPlace();
   });
 
   window.addEventListener('storage', (e) => {
@@ -1830,13 +1899,14 @@
   });
 
   let resizeTimer = null;
-  window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { el.sideNow._last = ''; render(); }, 150); });
+  window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(render, 150); });
 
   // ==================================================================
   // Start
   // ==================================================================
+  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
   render();
-  if (state.role) scrollToNow();
+  window.scrollTo(0, 0);
   setInterval(() => { if (tab === 'focus' && !document.hidden && !drag) updateLive(); }, 1000);
   setInterval(() => { if (!drag) updateLive(); }, 15000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) updateLive(); });
