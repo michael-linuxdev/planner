@@ -1,4 +1,4 @@
-/* Tagesplaner v3 – visueller Tagesplan, komplett lokal (localStorage), offline (Service Worker).
+/* Tagesplaner v3.1 – visueller Tagesplan, komplett lokal (localStorage), offline (Service Worker).
  * Vanilla JS, kein Build-Schritt, keine externen Anfragen. */
 'use strict';
 
@@ -385,7 +385,8 @@
     root.dataset.theme = theme;
     root.dataset.palette = activePalette();
     if (state.contrast) root.dataset.contrast = 'high'; else delete root.dataset.contrast;
-    $('#meta-theme').setAttribute('content', theme === 'dark' ? '#15171b' : '#f5f4f0');
+    // Statusleiste = echte Hintergrundfarbe (vorher leicht abweichend im Dunkelmodus)
+    $('#meta-theme').setAttribute('content', theme === 'dark' ? (state.contrast ? '#000000' : '#121418') : (state.contrast ? '#ffffff' : '#f5f4f0'));
   }
   darkMQ.addEventListener && darkMQ.addEventListener('change', applyTheme);
 
@@ -422,7 +423,7 @@
     planTop: $('#plan-top'), timeline: $('#timeline'), grid: $('#grid'), items: $('#items'),
     nowLine: $('#now-line'), nowLabel: $('#now-label'), dropPreview: $('#drop-preview'),
     placeLayer: $('#place-layer'), placeBar: $('#place-bar'), inboxList: $('#inbox-list'), inboxCount: $('#inbox-count'),
-    tabInboxCount: $('#tab-inbox-count'), focus: $('#focus'), focusBody: $('#focus-body'), focusClock: $('#focus-clock'),
+    tabInboxCount: $('#tab-inbox-count'), focus: $('#focus'), focusBody: $('#focus-body'), focusClock: $('#focus-clock'), focusDate: $('#focus-date'),
     editor: $('#editor'), more: $('#more'), choice: $('#choice'), toast: $('#toast'), live: $('#sr-live')
   };
   const TOP_PAD = 18;
@@ -433,7 +434,13 @@
 
   // ---------- Toast ----------
   let toastTimer = null;
+  function toastHost() {
+    const open = $$('dialog[open]').filter((d) => !d.classList.contains('closing'));
+    return open.length ? open[open.length - 1] : document.body;
+  }
   function toast(msg, action) {
+    const host = toastHost();
+    if (el.toast.parentNode !== host) host.appendChild(el.toast);
     el.toast.innerHTML = '<span>' + esc(msg) + '</span>' + (action ? '<button type="button" class="btn small">' + esc(action.label) + '</button>' : '');
     if (action) el.toast.querySelector('button').addEventListener('click', () => { hideToast(); action.fn(); });
     el.toast.classList.add('show');
@@ -452,17 +459,98 @@
         '<button value="' + esc(o.value) + '" class="choice-btn' + (o.danger ? ' danger' : '') + (i === 0 && !o.danger ? ' primary' : '') + '">' +
         (o.icon ? icon(o.icon) : '') + '<span><b>' + esc(o.label) + '</b>' + (o.desc ? '<small>' + esc(o.desc) + '</small>' : '') + '</span></button>').join('');
       el.choice.returnValue = '';
-      el.choice.addEventListener('close', () => resolve(el.choice.returnValue || null), { once: true });
+      choiceResolve = resolve;
+      el.choice.addEventListener('close', () => { if (choiceResolve === resolve) { choiceResolve = null; resolve(el.choice.returnValue || null); } }, { once: true });
       el.choice.showModal();
     });
   }
+  let choiceResolve = null;
+  $('#choice-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const v = (e.submitter && e.submitter.value) || '';
+    const r = choiceResolve;
+    choiceResolve = null;
+    el.choice.close(v);
+    if (r) r(v || null);
+  });
   const confirmDo = (title, text, okLabel, danger) =>
     choose({ title, text, options: [{ value: 'ok', label: okLabel || 'OK', danger }] }).then((v) => v === 'ok');
 
+  // ---------- Dialoge: sanft öffnen/schließen, Esc, Fokus halten und zurückgeben ----------
+  const FOCUSABLE = 'button, [href], input:not([type="hidden"]), select, textarea, summary, [tabindex]:not([tabindex="-1"])';
+  function focusables(root) {
+    return $$(FOCUSABLE, root).filter((x) => !x.disabled && x.getClientRects().length && !x.closest('[hidden]') &&
+      !(x.type === 'radio' && !x.checked && $$('input[type="radio"][name="' + x.name + '"]', root).some((r) => r.checked)));
+  }
   [el.editor, el.more, el.choice].forEach((dlg) => {
+    const nativeShow = HTMLDialogElement.prototype.showModal;
+    const nativeClose = HTMLDialogElement.prototype.close;
+    let timer = null;
+    dlg.showModal = function () {
+      clearTimeout(timer);
+      dlg.classList.remove('closing', 'swiping', 'settle');
+      dlg.style.transform = '';
+      if (dlg.open) return;
+      const a = document.activeElement;
+      dlg._opener = a && a !== document.body ? a : null;
+      dlg._openerItem = a && a.closest ? (a.closest('.item') || {}).dataset : null;
+      dlg._openerItem = dlg._openerItem && dlg._openerItem.id ? dlg._openerItem.id : null;
+      nativeShow.call(dlg);
+    };
+    dlg.close = function (v) {
+      if (!dlg.open) return;
+      if (v !== undefined) dlg.returnValue = v;
+      if (reducedMotion()) { nativeClose.call(dlg); return; }
+      if (dlg.classList.contains('closing')) return;
+      dlg.classList.add('closing');
+      timer = setTimeout(() => { dlg.classList.remove('closing'); dlg.style.transform = ''; nativeClose.call(dlg); }, dlg === el.choice ? 140 : 180);
+    };
+    dlg.addEventListener('cancel', (e) => { e.preventDefault(); dlg.close(); }); // Esc
     dlg.addEventListener('click', (e) => {
       if (e.target === dlg || e.target.closest('[data-close]')) dlg.close();
     });
+    dlg.addEventListener('keydown', (e) => { // Fokus bleibt im Dialog
+      if (e.key !== 'Tab') return;
+      const list = focusables(dlg);
+      if (!list.length) return;
+      const first = list[0], last = list[list.length - 1];
+      if (e.shiftKey && (document.activeElement === first || !dlg.contains(document.activeElement))) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    });
+    dlg.addEventListener('close', () => {
+      if (el.toast.parentNode === dlg) document.body.appendChild(el.toast);
+      if (document.querySelector('dialog[open]')) return;
+      let target = dlg._opener && dlg._opener.isConnected ? dlg._opener : null;
+      if (!target && dlg._openerItem) { const n = itemNode(dlg._openerItem); target = n && n.querySelector('.card'); }
+      if (target) target.focus({ preventScroll: true });
+    });
+    // Bottom-Sheet am Kopf nach unten wischen = schließen
+    const head = dlg.querySelector('.sheet-head');
+    if (!head) return;
+    let sw = null;
+    head.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse' || e.target.closest('button') || matchMedia('(min-width: 720px)').matches) return;
+      sw = { y0: e.clientY, dy: 0, id: e.pointerId };
+      try { head.setPointerCapture(e.pointerId); } catch (_) { /* egal */ }
+      dlg.classList.add('swiping');
+    });
+    head.addEventListener('pointermove', (e) => {
+      if (!sw || e.pointerId !== sw.id) return;
+      sw.dy = Math.max(0, e.clientY - sw.y0);
+      dlg.style.transform = 'translateY(' + sw.dy + 'px)';
+    });
+    const endSwipe = (e) => {
+      if (!sw || e.pointerId !== sw.id) return;
+      const far = sw.dy > 90;
+      sw = null;
+      dlg.classList.remove('swiping');
+      if (far) { dlg.close(); return; }
+      dlg.classList.add('settle');
+      dlg.style.transform = '';
+      setTimeout(() => dlg.classList.remove('settle'), 240);
+    };
+    head.addEventListener('pointerup', endSwipe);
+    head.addEventListener('pointercancel', endSwipe);
   });
 
   // ==================================================================
@@ -600,10 +688,11 @@
 
     if (!blocks.length) {
       html += '<section class="empty-card">' +
-        '<svg class="empty-art" viewBox="0 0 120 80" aria-hidden="true"><rect x="30" y="8" width="70" height="14" rx="7" class="e1"/><rect x="30" y="30" width="48" height="14" rx="7" class="e2"/><rect x="30" y="52" width="60" height="14" rx="7" class="e3"/><circle cx="16" cy="15" r="6" class="e1"/><circle cx="16" cy="37" r="6" class="e2"/><circle cx="16" cy="59" r="6" class="e3"/></svg>' +
-        '<h2>' + (isPastDay() ? 'Für diesen Tag gibt es keinen Plan.' : 'Noch nichts geplant.') + '</h2>' +
-        '<p>' + (isPastDay() ? 'Vergangene Tage bleiben leer, wenn nichts geplant war.' : 'Mit „+“ legst du einen Block an – oder du lädst eine Vorlage.') + '</p>' +
-        (isPastDay() ? '' : '<div class="row-btns"><button type="button" class="btn small" data-act="replan">' + icon('refresh') + '<span>Vorlage laden</span></button></div>') + '</section>';
+        '<svg class="empty-art" viewBox="0 0 120 80" aria-hidden="true"><rect x="30" y="8" width="70" height="14" rx="7" class="e1"/><rect x="30" y="30" width="48" height="14" rx="7" class="e0"/><rect x="30" y="52" width="60" height="14" rx="7" class="e3"/><circle cx="16" cy="15" r="6" class="e1"/><circle cx="16" cy="37" r="6" class="e2"/><circle cx="16" cy="59" r="6" class="e3"/></svg>' +
+        '<h2>' + (isPastDay() ? 'An diesem Tag war nichts geplant.' : 'Noch nichts geplant – und das ist okay.') + '</h2>' +
+        '<p>' + (isPastDay() ? 'Vergangene Tage bleiben, wie sie waren.' : 'Leg einen ersten Block an oder starte mit einer Vorlage.') + '</p>' +
+        (isPastDay() ? '' : '<div class="row-btns"><button type="button" class="btn small primary" data-act="add">' + icon('plus') + '<span>Block anlegen</span></button>' +
+          '<button type="button" class="btn small" data-act="replan">' + icon('refresh') + '<span>Vorlage laden</span></button></div>') + '</section>';
     }
     el.planTop.innerHTML = html;
   }
@@ -614,6 +703,7 @@
     const act = b.dataset.act;
     if (act === 'tips-ok') { state.tipsSeen = true; save(); render(); }
     else if (act === 'replan') replan();
+    else if (act === 'add') openEditor({ kind: 'block', day: viewKey });
     else if (act.startsWith('wrap-')) wrapAction(act.slice(5));
   });
 
@@ -729,7 +819,7 @@
     const t = TYPES[b.type];
     const top = yA(b.start);
     const h = Math.max(yB(b.start + b.dur) - top, 15);
-    const compact = h < 60, tiny = h < 42;
+    const compact = h < 60, tiny = h < 42, micro = h < 24, roomy = h >= 90;
     const ic = b.icon || b.type;
     const box = laneBox(pos);
     const open = openIds.has(b.id) && b.subtasks.length > 0;
@@ -738,15 +828,15 @@
       ? '<button type="button" class="sub-toggle no-drag" aria-expanded="' + open + '" aria-label="Unteraufgaben ' + (open ? 'zuklappen' : 'aufklappen') + ', ' + doneSubs + ' von ' + b.subtasks.length + ' erledigt">' + icon('chevron') + '<span>' + doneSubs + '/' + b.subtasks.length + '</span></button>'
       : '';
     const label = t.label + ': ' + b.title + ', ' + fmt(b.start) + ' bis ' + fmt(b.start + b.dur) + (b.done ? ', erledigt' : '');
-    let html = '<div class="item t-' + b.type + (compact ? ' compact' : '') + (tiny ? ' tiny' : '') + (b.done ? ' done' : '') +
+    let html = '<div class="item t-' + b.type + (compact ? ' compact' : '') + (tiny ? ' tiny' : '') + (micro ? ' micro' : '') + (roomy ? ' roomy' : '') + (b.done ? ' done' : '') +
       (pos.lane > 0 ? ' nobubble' : '') + (pos.lanes > 1 ? ' laned' : '') + (open ? ' open' : '') + '" data-id="' + b.id + '"' +
       ' style="top:' + top + 'px;height:' + h + 'px;left:' + box.left + ';width:' + box.width + '">' +
       (pos.lane === 0 ? '<div class="bubble" data-grip title="Ziehen zum Verschieben"><span class="bubble-fill"></span>' + icon(b.done ? 'check' : ic) + '</div>' : '') +
-      '<div class="card" tabindex="0" aria-roledescription="Zeitblock" aria-label="' + esc(label) + '. Enter bearbeiten, Leertaste abhaken, Pfeiltasten verschieben, Umschalt+Pfeile Dauer.">' +
+      '<div class="card" tabindex="0" title="' + esc(b.title + ' · ' + fmt(b.start) + '–' + fmt(b.start + b.dur)) + '" aria-roledescription="Zeitblock" aria-label="' + esc(label) + '. Enter bearbeiten, Leertaste abhaken, Pfeiltasten verschieben, Umschalt+Pfeile Dauer.">' +
         (pos.lane > 0 ? '<span class="card-icon">' + icon(ic) + '</span>' : '') +
         '<span class="card-text">' +
           '<span class="card-title">' + esc(b.title) + '</span>' +
-          '<span class="card-meta"><span class="card-time">' + fmt(b.start) + '–' + fmt(b.start + b.dur) + '</span><span class="card-dur"> · ' + durText(b.dur) + '</span>' +
+          '<span class="card-meta"><span class="card-time">' + fmt(b.start) + '–' + fmt(b.start + b.dur) + '</span><span class="card-dur"> · ' + durText(b.dur) + '</span><span class="card-live"></span>' +
           (b.recurId ? '<span class="rep" title="Wiederholt sich">' + icon('repeat') + '</span>' : '') + '</span>' +
         '</span>' +
         '<span class="badge"></span>' + sub +
@@ -772,7 +862,7 @@
     el.timeline.style.height = (H + TOP_PAD * 2) + 'px';
     let g = '';
     for (let m = G.start; m <= G.end; m += 60) {
-      g += '<div class="gridline" style="top:' + yA(m) + 'px"><span class="gridlabel">' + fmt(m) + '</span></div>';
+      g += '<div class="gridline" data-m="' + m + '" style="top:' + yA(m) + 'px"><span class="gridlabel">' + fmt(m) + '</span></div>';
       if (m + 30 < G.end) g += '<div class="gridline half" style="top:' + yA(m + 30) + 'px"></div>';
     }
     el.grid.innerHTML = g;
@@ -827,6 +917,8 @@
     const show = today && n >= G.start && n <= G.end;
     el.nowLine.hidden = !show;
     if (show) { el.nowLine.style.top = (TOP_PAD + yA(n)) + 'px'; el.nowLabel.textContent = fmt(n); }
+    // Stundenbeschriftung ausblenden, wenn die Jetzt-Marke darüber liegt
+    $$('.gridline[data-m]', el.grid).forEach((g) => g.classList.toggle('near-now', show && Math.abs(Number(g.dataset.m) - n) < 9));
 
     for (const b of viewDay().blocks) {
       const node = itemNode(b.id);
@@ -842,6 +934,8 @@
       node.style.setProperty('--p', isCur ? ((n - b.start) / b.dur).toFixed(4) : (isPast ? '1' : '0'));
       const badge = node.querySelector('.badge');
       badge.textContent = b.done ? '' : isUp ? 'in ' + Math.ceil(until) + ' Min' : (isCur ? 'noch ' + durText(Math.ceil(end - n)) : '');
+      const live = node.querySelector('.card-live');
+      if (live) live.textContent = badge.textContent ? ' · ' + badge.textContent : '';
     }
     renderFocus();
     checkReminders();
@@ -859,28 +953,43 @@
   }
 
   // ---------- Fokus-Ansicht ----------
-  let focusSig = '';
+  let focusSig = '', focusKey = '';
+  function greeting(m) {
+    if (m < 5 * 60) return 'Gute Nacht';
+    if (m < 11 * 60) return 'Guten Morgen';
+    if (m < 14 * 60) return 'Hallo';
+    if (m < 18 * 60) return 'Schönen Nachmittag';
+    if (m < 22 * 60) return 'Guten Abend';
+    return 'Gute Nacht';
+  }
   function renderFocus() {
     if (tab !== 'focus' || el.app.hidden) return;
     const info = nowInfo();
     const { n, cur, next, list } = info;
     el.focusClock.textContent = fmt(n);
+    el.focusClock.setAttribute('datetime', fmt(n));
+    el.focusDate.textContent = greeting(n) + ' · ' + dateLong.format(now());
     const active = cur && !cur.done ? cur : null;
     const wrap = !next && !active && wrapDue();
     const prog = dayProgress(info.k);
     const sig = JSON.stringify([list.length, active && [active.id, active.title, active.type, active.icon, active.dur, active.start, active.subtasks], cur && cur.done && cur.id, next && [next.id, next.title, next.start], info.prevEnd != null, wrap, prog]);
+    let enter = false;
     if (sig !== focusSig) {
       focusSig = sig;
+      // Einblenden nur, wenn sich wirklich etwas Neues zeigt (nicht beim Abhaken einer Unteraufgabe)
+      const key = JSON.stringify(list.length ? [active && active.id, cur && cur.done && cur.id, next && next.id, wrap] : 'leer');
+      enter = key !== focusKey;
+      focusKey = key;
       let html = '';
       if (!list.length) {
-        html = '<div class="focus-empty"><div class="celebrate calm">' + icon('sun') + '</div><h2>Heute ist noch nichts geplant.</h2><p>Das ist völlig in Ordnung. Wenn du magst, leg mit „+“ etwas an oder lade eine Vorlage.</p>' +
+        html = '<div class="focus-empty"><div class="celebrate calm">' + icon('sun') + '</div><h2>Heute ist noch nichts geplant.</h2><p>Das ist völlig in Ordnung. Wenn du magst, leg einen ersten Block an oder starte mit einer Vorlage.</p>' +
           '<div class="row-btns"><button type="button" class="btn primary" data-fact="add">' + icon('plus') + '<span>Block anlegen</span></button>' +
           '<button type="button" class="btn" data-fact="replan">' + icon('refresh') + '<span>Vorlage laden</span></button></div></div>';
       } else if (active) {
         const subs = active.subtasks;
         html = '<div class="focus-hero t-' + active.type + '">' +
-          '<div class="ring-wrap">' + ringSvg(1, 'big') + '<div class="ring-center"><span class="ring-ic">' + icon(active.icon || active.type) + '</span>' +
-            '<span class="ring-time" data-cd></span><span class="ring-sub">verbleibend</span></div></div>' +
+          '<div class="ring-wrap">' + ringSvg(enter ? 0 : 1, enter ? 'big intro' : 'big') + '<div class="ring-center"><span class="ring-ic">' + icon(active.icon || active.type) + '</span>' +
+            '<span class="ring-time" data-cd role="timer"></span><span class="ring-sub">verbleibend</span></div></div>' +
           '<span class="focus-type">' + esc(typeLabel(active.type)) + '</span>' +
           '<h2 class="focus-title">' + esc(active.title) + '</h2>' +
           '<p class="focus-range">' + fmt(active.start) + '–' + fmt(active.start + active.dur) + ' · ' + durText(active.dur) + '</p>' +
@@ -898,7 +1007,7 @@
         else if (next) { title = 'Freie Zeit'; text = 'Durchatmen. Du musst gerade nichts.'; }
         else { title = 'Feierabend'; text = prog && !wrap ? prog.done + ' von ' + prog.total + ' geschafft. Für heute ist nichts mehr geplant.' : 'Für heute ist nichts mehr geplant.'; }
         html = '<div class="focus-hero free">' +
-          (next ? '<div class="ring-wrap">' + ringSvg(1, 'big') + '<div class="ring-center"><span class="ring-ic">' + icon(before ? 'sun' : 'pause') + '</span><span class="ring-time" data-cd></span><span class="ring-sub">bis zum nächsten Block</span></div></div>'
+          (next ? '<div class="ring-wrap">' + ringSvg(enter ? 0 : 1, enter ? 'big intro' : 'big') + '<div class="ring-center"><span class="ring-ic">' + icon(before ? 'sun' : 'pause') + '</span><span class="ring-time" data-cd role="timer"></span><span class="ring-sub">bis zum nächsten Block</span></div></div>'
             : '<div class="celebrate">' + icon('moon') + '</div>') +
           '<h2 class="focus-title">' + title + '</h2><p class="focus-range">' + text + '</p></div>';
         if (wrap) html += wrapCardHtml('focus-wrap', 'data-fact');
@@ -908,10 +1017,15 @@
           '<span class="fn-text"><span class="kicker" data-next-in></span><b>' + esc(next.title) + '</b><span>' + fmt(next.start) + '–' + fmt(next.start + next.dur) + '</span></span></div>';
       }
       el.focusBody.innerHTML = html;
+      el.focusBody.classList.toggle('enter', enter);
     }
     // sekündliche Aktualisierung
     const cd = el.focusBody.querySelector('[data-cd]');
     const ringVal = el.focusBody.querySelector('.ring.big .ring-val');
+    if (enter && ringVal) {
+      getComputedStyle(ringVal).strokeDashoffset; // Startwert festhalten, damit der Ring sich sanft füllt
+      setTimeout(() => { const r = el.focusBody.querySelector('.ring.intro'); r && r.classList.remove('intro'); }, 1200);
+    }
     if (active && cd) {
       const leftSec = (active.start + active.dur - n) * 60;
       cd.textContent = clockText(leftSec);
@@ -1015,6 +1129,7 @@
     } catch (e) { /* kein Audio */ }
   }
   function haptic() { if (state.reminders.vibrate && navigator.vibrate) { try { navigator.vibrate(12); } catch (e) { /* egal */ } } }
+  function tick() { if (state.reminders.vibrate && navigator.vibrate) { try { navigator.vibrate(4); } catch (e) { /* egal */ } } }
 
   // ==================================================================
   // Später (Inbox)
@@ -1030,20 +1145,24 @@
     el.inboxCount.textContent = list.length ? String(list.length) : '';
     el.tabInboxCount.hidden = !list.length;
     el.tabInboxCount.textContent = list.length > 9 ? '9+' : String(list.length);
+    $('.tab[data-tab="inbox"]').setAttribute('aria-label', 'Später' + (list.length ? ', ' + list.length + (list.length === 1 ? ' Aufgabe' : ' Aufgaben') : ''));
     if (!list.length) {
-      el.inboxList.innerHTML = '<li class="inbox-empty">' + icon('inbox') + '<p><b>Dein Kopf ist frei.</b> Mit „+“ und „Später“ landet hier alles, was du irgendwann erledigen willst – ganz ohne Uhrzeit.</p></li>';
+      el.inboxList.innerHTML = '<li class="inbox-empty"><span class="empty-ic">' + icon('inbox') + '</span><h2>Dein Kopf ist frei.</h2>' +
+        '<p>Was irgendwann dran ist, darf hier warten – ganz ohne Uhrzeit. Einplanen kannst du es, wenn es passt.</p>' +
+        '<button type="button" class="btn small primary" data-ib-new>' + icon('plus') + '<span>Etwas notieren</span></button></li>';
       return;
     }
     el.inboxList.innerHTML = list.map((b) =>
       '<li class="ib t-' + b.type + '" data-id="' + b.id + '">' +
         '<span class="ib-bubble">' + icon(b.icon || b.type) + '</span>' +
-        '<button type="button" class="ib-main" data-ib="edit"><b>' + esc(b.title) + '</b><small>' + durText(b.dur) + ' · ' + esc(typeLabel(b.type)) + (b.subtasks.length ? ' · ' + b.subtasks.length + ' Unteraufg.' : '') + '</small></button>' +
+        '<button type="button" class="ib-main" data-ib="edit"><b>' + esc(b.title) + '</b><small>' + durText(b.dur) + ' · ' + esc(typeLabel(b.type)) + (b.subtasks.length ? ' · ' + b.subtasks.length + (b.subtasks.length === 1 ? ' Unteraufgabe' : ' Unteraufgaben') : '') + '</small></button>' +
         '<button type="button" class="btn small ib-plan" data-ib="plan" aria-label="' + esc(b.title) + ' einplanen">' + icon('calendar') + '<span>Einplanen</span></button>' +
         '<button type="button" class="check" data-ib="done" aria-label="Erledigt: ' + esc(b.title) + '">' + icon('check') + '</button>' +
       '</li>').join('');
   }
 
   el.inboxList.addEventListener('click', (e) => {
+    if (e.target.closest('[data-ib-new]')) { openEditor({ kind: 'inbox' }); return; }
     const b = e.target.closest('[data-ib]');
     if (!b) return;
     const id = b.closest('.ib').dataset.id;
@@ -1054,7 +1173,7 @@
       const li = b.closest('.ib');
       li.classList.add('just-done');
       haptic();
-      setTimeout(() => mutate('Erledigt – stark!', () => { state.inbox = state.inbox.filter((x) => x.id !== id); }), reducedMotion() ? 0 : 380);
+      setTimeout(() => mutate('Erledigt. Gut gemacht!', () => { state.inbox = state.inbox.filter((x) => x.id !== id); }), reducedMotion() ? 0 : 380);
     }
   });
 
@@ -1240,8 +1359,34 @@
     d.node.classList.remove('upcoming');
     d.node.classList.add('dragging', d.mode === 'resize' ? 'is-resizing' : 'is-moving');
     document.body.classList.add('is-dragging');
+    // Zielplatz-Umriss an die Kartenposition legen
+    const tr = el.timeline.getBoundingClientRect(), cr = d.node.querySelector('.card').getBoundingClientRect();
+    const pv = el.dropPreview;
+    pv.classList.add('ghost');
+    pv.style.left = (cr.left - tr.left) + 'px'; pv.style.width = cr.width + 'px'; pv.style.right = 'auto';
+    pv.style.setProperty('--g', getComputedStyle(d.node).getPropertyValue('--c-solid').trim() || 'var(--accent)');
+    pv.hidden = false;
     applyDrag();
     d.raf = requestAnimationFrame(autoScroll);
+  }
+  function hideGhost() {
+    const pv = el.dropPreview;
+    pv.hidden = true;
+    pv.classList.remove('ghost');
+    pv.style.left = pv.style.width = pv.style.right = '';
+    pv.style.removeProperty('--g');
+  }
+  // Nach dem Neuzeichnen vom alten Platz sanft an den neuen gleiten (FLIP)
+  function settle(id, from) {
+    const n = itemNode(id);
+    if (!n || !from || reducedMotion()) return;
+    const to = { top: n.style.top, height: n.style.height };
+    if (to.top === from.top && to.height === from.height) return;
+    n.style.transition = 'none';
+    n.style.top = from.top; n.style.height = from.height;
+    void n.offsetHeight;
+    n.style.transition = '';
+    n.style.top = to.top; n.style.height = to.height;
   }
 
   window.addEventListener('pointermove', (e) => {
@@ -1260,18 +1405,28 @@
   window.addEventListener('pointercancel', (e) => endPointer(e, true));
   document.addEventListener('touchmove', (e) => { if (drag && drag.active) e.preventDefault(); }, { passive: false });
 
+  // Der Block folgt dem Finger stufenlos; der Umriss zeigt, wo er eingerastet landet.
   function applyDrag() {
     const d = drag;
     const step = state.snap;
     const dm = ((d.y - d.y0) + (window.scrollY - d.s0)) / PPM;
+    const prevStart = d.cur.start, prevDur = d.cur.dur;
     if (d.mode === 'move') {
-      d.cur.start = clamp(Math.round((d.orig.start + dm) / step) * step, G.start, G.end - d.orig.dur);
-      d.node.style.top = yA(d.cur.start) + 'px';
+      const raw = clamp(d.orig.start + dm, G.start, G.end - d.orig.dur);
+      d.cur.start = clamp(Math.round(raw / step) * step, G.start, G.end - d.orig.dur);
+      d.node.style.top = yA(raw) + 'px';
     } else {
-      const end = clamp(Math.round((d.orig.start + d.orig.dur + dm) / step) * step, d.orig.start + minDur(), G.end);
+      const rawEnd = clamp(d.orig.start + d.orig.dur + dm, d.orig.start + minDur(), G.end);
+      const end = clamp(Math.round(rawEnd / step) * step, d.orig.start + minDur(), G.end);
       d.cur.dur = end - d.orig.start;
-      d.node.style.height = (d.cur.dur * PPM) + 'px';
+      d.node.style.height = ((rawEnd - d.orig.start) * PPM) + 'px';
     }
+    const pv = el.dropPreview;
+    pv.style.top = (TOP_PAD + yA(d.cur.start)) + 'px';
+    pv.style.height = (d.cur.dur * PPM) + 'px';
+    pv.firstChild.textContent = fmt(d.cur.start) + '–' + fmt(d.cur.start + d.cur.dur);
+    // ganz leichtes Ticken bei jeder Viertelstunde
+    if ((d.cur.start !== prevStart || d.cur.dur !== prevDur) && (d.cur.start + (d.mode === 'resize' ? d.cur.dur : 0)) % 15 === 0) tick();
     const t = d.node.querySelector('.card-time');
     if (t) t.textContent = fmt(d.cur.start) + '–' + fmt(d.cur.start + d.cur.dur);
     const dd = d.node.querySelector('.card-dur');
@@ -1304,12 +1459,15 @@
     d.node.classList.remove('pressing', 'dragging', 'is-moving', 'is-resizing');
     const moved = Math.hypot(e.clientX - d.x0, e.clientY - d.y0);
     if (d.active) {
+      hideGhost();
       suppressClick = true;
       setTimeout(() => { suppressClick = false; }, 80);
-      if (cancelled) { render(); return; }
+      const from = { top: d.node.style.top, height: d.node.style.height };
+      if (cancelled) { render(); settle(d.id, from); return; }
       const b = findBlock(d.id);
       if (!b || (b.start === d.cur.start && b.dur === d.cur.dur)) {
         render();
+        settle(d.id, from);
         if (moved < 6 && d.mode === 'move') openEditor({ kind: 'block', id: d.id }); // Antippen der Bubble
         return;
       }
@@ -1317,6 +1475,8 @@
         const x = materialize(viewKey).blocks.find((y) => y.id === d.id);
         x.start = d.cur.start; x.dur = d.cur.dur;
       });
+      settle(d.id, from);
+      haptic();
       announce(fmt(d.cur.start) + ' bis ' + fmt(d.cur.start + d.cur.dur));
     } else if (!cancelled && moved < 8) {
       openEditor({ kind: 'block', id: d.id }); // Tippen = bearbeiten
@@ -1426,7 +1586,7 @@
   function syncKind() {
     const isBlock = ed.kind === 'block', existing = !ed.isNew;
     $('#ed-title').textContent = ed.isNew
-      ? (isBlock ? 'Neu' + (ed.day !== todayKey() ? ' · ' + relName(ed.day) : '') : 'Neu für später')
+      ? (isBlock ? 'Neuer Block' + (ed.day !== todayKey() ? ' · ' + relName(ed.day) : '') : 'Für später notieren')
       : (isBlock ? 'Block bearbeiten' : 'Aufgabe für später');
     f.name.placeholder = isBlock ? 'Was hast du vor?' : 'Was willst du irgendwann erledigen?';
     f.startField.hidden = !isBlock;
@@ -1487,7 +1647,7 @@
     f.dur.textContent = durText(d.dur);
     const s = readStart();
     f.end.textContent = ed.kind === 'block'
-      ? fmt(s) + '–' + fmt(Math.min(s + d.dur, 24 * 60)) + ' Uhr' + (ed.autoStart ? ' · nächste freie Lücke' : '') + ' · Uhrzeit unter „Genauer“'
+      ? fmt(s) + '–' + fmt(Math.min(s + d.dur, 24 * 60)) + ' Uhr' + (ed.autoStart ? ' · nächste freie Lücke' : '')
       : 'Ohne Uhrzeit – du planst es ein, wenn es passt.';
     $$('.chip', f.chips).forEach((c) => c.setAttribute('aria-pressed', String(Number(c.dataset.min) === d.dur)));
   }
@@ -1912,6 +2072,10 @@
   document.addEventListener('visibilitychange', () => { if (!document.hidden) updateLive(); });
 
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+    const hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (hadController) toast('Neue Version ist bereit.', { label: 'Neu laden', fn: () => location.reload() });
+    });
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('./sw.js').catch((err) => console.warn('Service Worker nicht registriert:', err));
     });

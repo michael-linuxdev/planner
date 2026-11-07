@@ -3,7 +3,7 @@
  * "stale-while-revalidate" (sofort aus dem Cache, im Hintergrund aktualisieren).
  * Bei Änderungen an den Dateien CACHE-Version erhöhen.
  */
-const CACHE = 'tagesplaner-v3.0.0';
+const CACHE = 'tagesplaner-v3.1.0';
 const ASSETS = [
   './',
   './index.html',
@@ -20,7 +20,7 @@ const ASSETS = [
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting())
+    caches.open(CACHE).then((cache) => cache.addAll(ASSETS.map((u) => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting())
   );
 });
 

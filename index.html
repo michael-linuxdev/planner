@@ -52,7 +52,7 @@
       <button type="button" class="tab" data-tab="focus" data-icon="focus"><span>Jetzt</span></button>
       <button type="button" class="tab" data-tab="plan" data-icon="plan"><span>Heute</span></button>
       <button id="fab" type="button" class="fab" aria-label="Neu hinzufügen" data-icon="plus"><span class="fab-label">Neu</span></button>
-      <button type="button" class="tab" data-tab="inbox" data-icon="inbox"><span>Später</span><i id="tab-inbox-count" class="tab-count" hidden></i></button>
+      <button type="button" class="tab" data-tab="inbox" data-icon="inbox"><span>Später</span><i id="tab-inbox-count" class="tab-count" hidden aria-hidden="true"></i></button>
       <button id="btn-more" type="button" class="tab" data-icon="more" aria-haspopup="dialog"><span>Mehr</span></button>
     </nav>
 
@@ -60,8 +60,11 @@
       <!-- Jetzt -->
       <section id="focus" class="view focus" aria-labelledby="focus-h">
         <header class="view-head">
-          <h1 id="focus-h">Jetzt</h1>
-          <span id="focus-clock" class="focus-clock"></span>
+          <div class="head-text">
+            <p id="focus-date" class="head-date"></p>
+            <h1 id="focus-h">Jetzt</h1>
+          </div>
+          <time id="focus-clock" class="focus-clock"></time>
         </header>
         <div id="focus-body" class="focus-body"></div>
       </section>
@@ -93,8 +96,11 @@
       <!-- Später -->
       <section id="inbox" class="view inbox" aria-labelledby="inbox-h">
         <header class="view-head">
-          <h1 id="inbox-h">Später</h1>
-          <span id="inbox-count" class="count"></span>
+          <div class="head-text">
+            <p class="head-date">Ohne Uhrzeit – wann es passt</p>
+            <h1 id="inbox-h">Später</h1>
+          </div>
+          <span id="inbox-count" class="count" aria-label="Anzahl"></span>
         </header>
         <ul id="inbox-list" class="inbox-list"></ul>
       </section>
@@ -147,7 +153,7 @@
         <p id="ed-end" class="field-hint"></p>
 
         <details id="ed-detail" class="ed-detail">
-          <summary>Genauer</summary>
+          <summary>Uhrzeit &amp; mehr</summary>
           <div class="field-row">
             <div class="field" id="ed-start-field">
               <span class="field-label" id="ed-start-label">Start</span>
@@ -268,7 +274,7 @@
             <input id="s-sound" type="checkbox" role="switch">
           </label>
           <label class="row-field switch">
-            <span>Vibration<small>Auf Geräten, die es unterstützen</small></span>
+            <span>Vibration<small>Kurzes Feedback beim Abhaken und Ziehen</small></span>
             <input id="s-vibrate" type="checkbox" role="switch">
           </label>
           <label class="row-field switch">
@@ -288,14 +294,14 @@
           </div>
           <input id="s-import-file" type="file" accept="application/json,.json" hidden>
         </details>
-        <p class="about">Tagesplaner · Version 3 · Kein Konto, keine Cloud, keine KI. Deine Daten verlassen nie dieses Gerät.</p>
+        <p class="about">Tagesplaner · Version 3.1 · Kein Konto, keine Cloud, keine KI. Deine Daten verlassen nie dieses Gerät.</p>
       </div>
     </div>
   </dialog>
 
   <!-- ================= Bestätigung / Auswahl ================= -->
   <dialog id="choice" class="modal" aria-labelledby="choice-title">
-    <form method="dialog">
+    <form method="dialog" id="choice-form">
       <h2 id="choice-title"></h2>
       <p id="choice-text"></p>
       <div id="choice-options" class="choice-options"></div>
