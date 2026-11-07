@@ -3,11 +3,12 @@
  * "stale-while-revalidate" (sofort aus dem Cache, im Hintergrund aktualisieren).
  * Bei Änderungen an den Dateien CACHE-Version erhöhen.
  */
-const CACHE = 'tagesplaner-v3.1.0';
+const CACHE = 'tagesplaner-v5';
 const ASSETS = [
   './',
   './index.html',
   './styles.css',
+  './logic.js',
   './app.js',
   './manifest.webmanifest',
   './icons/icon.svg',

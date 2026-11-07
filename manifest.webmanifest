@@ -1,7 +1,7 @@
 {
   "name": "Tagesplaner – visuell & ruhig",
   "short_name": "Tagesplaner",
-  "description": "Visueller Tagesplaner mit Zeitleiste, Rollen-Vorlagen und Unteraufgaben. Komplett lokal und offline.",
+  "description": "Was jetzt dran ist, und was danach kommt. Komplett lokal und offline.",
   "lang": "de",
   "dir": "ltr",
   "id": "./",
@@ -9,8 +9,8 @@
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#f5f4f0",
-  "theme_color": "#f5f4f0",
+  "background_color": "#f3f0e8",
+  "theme_color": "#f3f0e8",
   "categories": ["productivity", "lifestyle"],
   "icons": [
     { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
