@@ -61,6 +61,19 @@ test('Titel mit Uhrzeit spart das Eintippen der Zeit', () => {
   assert.strictEqual(L.pullTime('25:00 Nein', 30), null);
 });
 
+test('Alte Arten werden übernommen, der Block bleibt', () => {
+  assert.strictEqual(L.canonicalType('deep'), 'deep');
+  assert.strictEqual(L.canonicalType('focused'), 'deep');
+  assert.strictEqual(L.canonicalType('reactive'), 'quick');
+  assert.strictEqual(L.canonicalType('flexible'), 'quick');
+  assert.strictEqual(L.canonicalType('meeting'), 'meeting');
+  assert.strictEqual(L.canonicalType('pause'), 'pause');
+  assert.strictEqual(L.canonicalType('buffer'), 'buffer');
+  assert.strictEqual(L.canonicalType('quick'), 'quick');
+  assert.strictEqual(L.canonicalType('unbekannt'), 'quick');
+  assert.strictEqual(L.canonicalType(undefined), 'quick');
+});
+
 test('Erfolgstoast nur nach echtem Speichern', () => {
   assert.strictEqual(L.saveMessage(true, false, null), null);
   assert.strictEqual(L.saveMessage(true, false, 'Gespeichert.'), 'Gespeichert.');

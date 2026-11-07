@@ -66,6 +66,15 @@
     return label || null;
   }
 
+  const TYPE_KEEP = { deep: 'deep', meeting: 'meeting', pause: 'pause', buffer: 'buffer', quick: 'quick' };
+  const TYPE_MERGE = { focused: 'deep', reactive: 'quick', flexible: 'quick' };
+
+  function canonicalType(type) {
+    if (TYPE_KEEP[type]) return TYPE_KEEP[type];
+    if (TYPE_MERGE[type]) return TYPE_MERGE[type];
+    return 'quick';
+  }
+
   function pullTime(title, dur) {
     const m = /^(\d{1,2})[:.](\d{2})\s+(.+)$/.exec(String(title || '').trim());
     if (!m) return null;
@@ -76,5 +85,5 @@
     return { title: m[3].slice(0, 80), start: fit.start, dur: fit.dur };
   }
 
-  return { isSafeId, takeId, weekday, isWeekend, fitTime, ruleHits, icsUid, saveMessage, pullTime, DAY };
+  return { isSafeId, takeId, weekday, isWeekend, fitTime, ruleHits, icsUid, saveMessage, pullTime, canonicalType, DAY };
 });

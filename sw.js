@@ -3,7 +3,7 @@
  * "stale-while-revalidate" (sofort aus dem Cache, im Hintergrund aktualisieren).
  * Bei Änderungen an den Dateien CACHE-Version erhöhen.
  */
-const CACHE = 'tagesplaner-v3.2.0';
+const CACHE = 'tagesplaner-v3.2.2';
 const ASSETS = [
   './',
   './index.html',
@@ -57,7 +57,7 @@ self.addEventListener('fetch', (event) => {
       return cached;
     }
     const res = await network;
-    return res || new Response('Offline – Datei nicht im Cache.', {
+    return res || new Response('Ohne Netz – diese Datei ist noch nicht gespeichert.', {
       status: 503,
       headers: { 'Content-Type': 'text/plain; charset=utf-8' }
     });

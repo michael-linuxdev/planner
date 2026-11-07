@@ -32,7 +32,7 @@ Alles andere steckt im Menü **Mehr**: Tag abschließen, Tag neu planen, In Kale
 | Tastatur | Block fokussieren: Enter = bearbeiten, Leertaste = erledigt, ↑/↓ = verschieben, Umschalt + ↑/↓ = Dauer, Entf = löschen, Esc = Einplanen abbrechen. In Fenstern: Esc schließt, Tab bleibt im Fenster, danach kehrt der Fokus zurück. |
 | Fenster schließen | ✕, Esc, Tippen daneben oder (mobil) am Kopf nach unten wischen |
 
-**Arten:** Fokus = Deep Work, Termin = Meeting, Pause, Kleinkram = Quick/Admin. Focused, Reactive, Buffer und Flexible bleiben unter „Mehr Typen“; die Rollen-Vorlagen nutzen alle 8 Arten mit ihren Farben.
+**Arten:** Fokus, Termin, Pause und Kleinkram. Puffer gibt es bei Entwickler und Erziehung zusätzlich. Gespeicherte Blöcke älterer Zusatzarten werden beim Laden zu Fokus oder Kleinkram. Titel, Uhrzeit und Unteraufgaben bleiben.
 
 **Demo-Uhrzeit:** `?zeit=HH:MM` fixiert die Uhrzeit, z. B. `/?zeit=10:52`.
 
@@ -54,7 +54,7 @@ Statisch, kein Build-Schritt: `CNAME` (planner.micana.de), `.nojekyll`, `404.htm
 2. GitHub → Settings → Pages → *Deploy from a branch* → `main` / `/ (root)`.
 3. DNS: `CNAME`-Eintrag `planner` → `michael-linuxdev.github.io`, danach „Enforce HTTPS“.
 
-**Updates:** Nach Code-Änderungen die Konstante `CACHE` in `sw.js` erhöhen (aktuell `tagesplaner-v3.1.0`). Der Service Worker liefert sofort aus dem Cache und lädt im Hintergrund nach; sobald die neue Version bereit ist, erscheint „Neue Version ist bereit · Neu laden“.
+**Updates:** Nach Code-Änderungen die Konstante `CACHE` in `sw.js` erhöhen (aktuell `tagesplaner-v3.2.2`). Der Service Worker liefert sofort aus dem Cache und lädt im Hintergrund nach; sobald die neue Version bereit ist, erscheint „Neue Version ist bereit · Neu laden“.
 
 ## Als App installieren
 
