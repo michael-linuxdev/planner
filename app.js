@@ -242,7 +242,7 @@
   function defaults() {
     return {
       version: 2, role: null, palette: 'auto', theme: 'auto', contrast: false, leftHand: false, snap: 5,
-      dayStart: 8 * 60, dayEnd: 18 * 60, newDay: 'role', custom: null,
+      dayStart: 8 * 60, dayEnd: 18 * 60, lunchStart: 12 * 60, lunchDur: 60, newDay: 'role', custom: null,
       recurring: [], inbox: [], days: {},
       reminders: { sound: false, vibrate: false, notify: false },
       tipsSeen: false
@@ -265,6 +265,11 @@
       subtasks: Array.isArray(b.subtasks) ? b.subtasks.filter((s) => s && s.text).map((s) => ({ id: nextId(s.id), text: String(s.text).slice(0, 80), done: !!s.done })) : [],
       done: !!b.done
     };
+    if (b.fixed === false) o.fixed = false;
+    else if (b.fixed === true) o.fixed = true;
+    if (b.half === 'am' || b.half === 'pm') o.half = b.half;
+    if (Number.isFinite(Number(b.rank))) o.rank = Number(b.rank);
+    if (b.lunch === true) o.lunch = true;
     if (!o.title) o.title = TYPES[o.type].label;
     if (b.recurId != null && b.recurId !== '') {
       const raw = String(b.recurId);
@@ -290,6 +295,8 @@
     if (!['auto', 'light', 'dark'].includes(st.theme)) st.theme = 'auto';
     if (!['role', 'custom', 'empty'].includes(st.newDay)) st.newDay = 'role';
     st.leftHand = st.leftHand === true;
+    st.lunchStart = [10, 11, 12, 13, 14].map((h) => h * 60).includes(st.lunchStart) ? st.lunchStart : 12 * 60;
+    st.lunchDur = [30, 45, 60, 90].includes(st.lunchDur) ? st.lunchDur : 60;
     st.dayStart = hourBound(st.dayStart, defaults().dayStart, 0, 22 * 60);
     st.dayEnd = hourBound(st.dayEnd, Math.max(defaults().dayEnd, st.dayStart + 120), st.dayStart + 120, 24 * 60);
     st.reminders = Object.assign(defaults().reminders, st.reminders || {});
@@ -624,6 +631,48 @@
     head.addEventListener('pointercancel', endSwipe);
   });
 
+  function lunchOf(blocks) {
+    const marked = blocks.find((b) => b.lunch);
+    if (marked) return { start: marked.start, end: marked.start + marked.dur };
+    const named = blocks.find((b) => b.type === 'pause' && /mittag/i.test(b.title || ''));
+    if (named) return { start: named.start, end: named.start + named.dur, adopt: named };
+    return { start: state.lunchStart, end: state.lunchStart + state.lunchDur, create: true };
+  }
+  function layoutFocusDay(k) {
+    if (!k || k < todayKey()) return;
+    const had = !!state.days[k];
+    const day = getDay(k);
+    const blocks = day.blocks;
+    let changed = false;
+    let window = lunchOf(blocks);
+    if (window.adopt) { window.adopt.lunch = true; window.adopt.fixed = true; changed = true; }
+    if (window.create) {
+      blocks.push(normBlock({ title: 'Mittagspause', type: 'pause', icon: 'food', start: window.start, dur: state.lunchDur, lunch: true, fixed: true }));
+      changed = true;
+    }
+    const placed = TL.placeFlex(blocks, {
+      dayStart: state.dayStart, dayEnd: state.dayEnd, lunchStart: window.start, lunchEnd: window.end
+    });
+    placed.forEach((p) => {
+      const b = blocks.find((x) => x.id === p.id);
+      if (b && b.start !== p.start) { b.start = p.start; changed = true; }
+    });
+    if (changed && had) save();
+  }
+  function syncLunchToday() {
+    const k = todayKey();
+    const day = state.days[k] || drafts[k];
+    if (!day) return;
+    const b = day.blocks.find((x) => x.lunch) || day.blocks.find((x) => x.type === 'pause' && /mittag/i.test(x.title || ''));
+    if (!b) return;
+    if (!state.days[k]) materialize(k);
+    b.lunch = true;
+    b.fixed = true;
+    b.start = state.lunchStart;
+    b.dur = state.lunchDur;
+    if (!/mittag/i.test(b.title || '')) b.title = 'Mittagspause';
+  }
+
   // ==================================================================
   // Rendern
   // ==================================================================
@@ -634,6 +683,7 @@
     el.app.hidden = false;
     document.body.dataset.tab = tab;
     $$('.tab[data-tab]').forEach((t) => t.setAttribute('aria-current', String(t.dataset.tab === tab)));
+    if (!drag) layoutFocusDay(viewKey);
     renderHeader();
     renderPlanTop();
     renderTimeline();
@@ -743,7 +793,6 @@
   function goDay(k, scroll) {
     viewKey = k;
     openIds.clear();
-    if (tab === 'focus') tab = 'plan';
     render();
     if (scroll !== false) { if (isToday()) scrollToNow(); else window.scrollTo(0, 0); }
   }
@@ -1127,109 +1176,162 @@
     if (m < 22 * 60) return 'Guten Abend';
     return 'Gute Nacht';
   }
+  function focusHalfRows(blocks, half, lunch) {
+    return blocks.filter((b) => !b.lunch && TL.halfOf(b, lunch.start, lunch.end) === half)
+      .sort((a, b) => a.start - b.start || (a.rank || 0) - (b.rank || 0));
+  }
   function renderFocus() {
-    if (tab !== 'focus' || el.app.hidden) return;
-    const info = nowInfo();
-    const { n, cur, next, list } = info;
-    el.focusClock.textContent = fmt(n);
-    el.focusClock.setAttribute('datetime', fmt(n));
-    el.focusDate.textContent = greeting(n) + ' · ' + dateLong.format(now());
-    const active = cur && !cur.done ? cur : null;
-    const wrap = !next && !active && wrapDue();
-    const prog = dayProgress(info.k);
-    const sig = JSON.stringify([list.length, active && [active.id, active.title, active.type, active.icon, active.dur, active.start, active.subtasks], cur && cur.done && cur.id, next && [next.id, next.title, next.start], info.prevEnd != null, wrap, prog]);
-    let enter = false;
-    if (sig !== focusSig) {
-      focusSig = sig;
-      // Einblenden nur, wenn sich wirklich etwas Neues zeigt (nicht beim Abhaken einer Unteraufgabe)
-      const key = JSON.stringify(list.length ? [active && active.id, cur && cur.done && cur.id, next && next.id, wrap] : 'leer');
-      enter = key !== focusKey;
-      focusKey = key;
-      let html = '';
-      if (!list.length) {
-        html = '<div class="focus-empty"><div class="celebrate calm">' + icon('sun') + '</div><h2>Heute ist noch nichts geplant.</h2><p>Das ist völlig in Ordnung. Wenn du magst, leg einen ersten Block an oder starte mit einer Vorlage.</p>' +
-          '<div class="row-btns"><button type="button" class="btn primary" data-fact="add">' + icon('plus') + '<span>Block anlegen</span></button>' +
-          '<button type="button" class="btn" data-fact="replan">' + icon('refresh') + '<span>Vorlage laden</span></button></div></div>';
-      } else if (active) {
-        const subs = active.subtasks;
-        html = '<div class="focus-hero t-' + active.type + '">' +
-          '<div class="ring-wrap">' + ringSvg(enter ? 0 : 1, enter ? 'big intro' : 'big') + '<div class="ring-center"><span class="ring-ic">' + icon(active.icon || active.type) + '</span>' +
-            '<span class="ring-time" data-cd role="timer"></span><span class="ring-sub">verbleibend</span></div></div>' +
-          '<span class="focus-type">' + esc(typeLabel(active.type)) + '</span>' +
-          '<h2 class="focus-title">' + esc(active.title) + '</h2>' +
-          '<p class="focus-range">' + fmt(active.start) + '–' + fmt(active.start + active.dur) + ' · ' + durText(active.dur) + '</p>' +
-          '<div class="focus-actions"><button type="button" class="btn primary big" data-fact="done">' + icon('check') + '<span>Erledigt</span></button>' +
-          '<button type="button" class="btn big" data-fact="plus5">' + icon('plus') + '<span>5 Min</span></button>' +
-          '<button type="button" class="btn big icon-only" data-fact="edit" aria-label="Bearbeiten">' + icon('pen') + '</button></div>' +
-          (subs.length ? '<ul class="focus-subs">' + subs.map((s) => '<li><label class="check-row big"><input type="checkbox" data-fsub="' + s.id + '"' + (s.done ? ' checked' : '') + '><span>' + esc(s.text) + '</span></label></li>').join('') + '</ul>' : '') +
-          '</div>';
-      } else {
-        const doneCur = cur && cur.done ? cur : null;
-        const before = next && info.prevEnd == null && !doneCur; // vor dem ersten Block
-        let title, text;
-        if (doneCur) { title = 'Geschafft: ' + esc(doneCur.title); text = next ? 'Durchatmen. Du musst gerade nichts.' : 'Für heute ist nichts mehr geplant.'; }
-        else if (before) { title = 'Gleich geht’s los'; text = 'Dein Tag startet um ' + fmt(next.start) + '. Bis dahin musst du nichts.'; }
-        else if (next) { title = 'Freie Zeit'; text = 'Durchatmen. Du musst gerade nichts.'; }
-        else { title = 'Feierabend'; text = prog && !wrap ? prog.done + ' von ' + prog.total + ' geschafft. Für heute ist nichts mehr geplant.' : 'Für heute ist nichts mehr geplant.'; }
-        html = '<div class="focus-hero free">' +
-          (next ? '<div class="ring-wrap">' + ringSvg(enter ? 0 : 1, enter ? 'big intro' : 'big') + '<div class="ring-center"><span class="ring-ic">' + icon(before ? 'sun' : 'pause') + '</span><span class="ring-time" data-cd role="timer"></span><span class="ring-sub">bis zum nächsten Block</span></div></div>'
-            : '<div class="celebrate">' + icon('moon') + '</div>') +
-          '<h2 class="focus-title">' + title + '</h2><p class="focus-range">' + text + '</p></div>';
-        if (wrap) html += wrapCardHtml('focus-wrap', 'data-fact');
-      }
-      if (next) {
-        html += '<div class="focus-next t-' + next.type + '" data-next><span class="mini-bubble">' + icon(next.icon || next.type) + '</span>' +
-          '<span class="fn-text"><span class="kicker" data-next-in></span><b>' + esc(next.title) + '</b><span>' + fmt(next.start) + '–' + fmt(next.start + next.dur) + '</span></span></div>';
-      }
-      el.focusBody.innerHTML = html;
-      el.focusBody.classList.toggle('enter', enter);
+    if (tab !== 'focus' || el.app.hidden || !el.focusDate) return;
+    const k = viewKey;
+    const day = getDay(k);
+    const lunch = lunchOf(day.blocks);
+    const n = nowMin();
+    const current = k === todayKey() ? (n < lunch.start ? 'am' : (n < lunch.end ? 'lunch' : 'pm')) : null;
+    el.focusDate.textContent = relName(k) + (k === todayKey() ? '' : ' · ' + dateShort.format(keyToDate(k)));
+    const am = focusHalfRows(day.blocks, 'am', lunch);
+    const pm = focusHalfRows(day.blocks, 'pm', lunch);
+    const nowId = current === 'am' || current === 'pm'
+      ? ((current === 'am' ? am : pm).find((b) => !b.done) || {}).id
+      : null;
+    const sig = JSON.stringify([k, lunch.start, lunch.end, nowId, am.map(rowSig), pm.map(rowSig), wrapDue() && k === todayKey()]);
+    if (sig === focusSig) return;
+    focusSig = sig;
+    const catalog = state.role ? fromTemplate(state.role).map((b) => ({ title: b.title, type: b.type, dur: b.dur, start: b.start, icon: b.icon })) : [];
+    let html = '';
+    if (k === todayKey() && wrapDue()) {
+      html += '<section class="fl-wrap"><p>Noch offen heute.</p><button type="button" class="btn small primary" data-fl="tomorrow">Auf morgen</button></section>';
     }
-    // sekündliche Aktualisierung
-    const cd = el.focusBody.querySelector('[data-cd]');
-    const ringVal = el.focusBody.querySelector('.ring.big .ring-val');
-    if (enter && ringVal) {
-      getComputedStyle(ringVal).strokeDashoffset; // Startwert festhalten, damit der Ring sich sanft füllt
-      setTimeout(() => { const r = el.focusBody.querySelector('.ring.intro'); r && r.classList.remove('intro'); }, 1200);
-    }
-    if (active && cd) {
-      const leftSec = (active.start + active.dur - n) * 60;
-      cd.textContent = clockText(leftSec);
-      ringVal.style.strokeDashoffset = (100 - clamp(leftSec / (active.dur * 60), 0, 1) * 100).toFixed(2);
-    } else if (cd && next) {
-      const base = info.prevEnd != null ? info.prevEnd : Math.min(next.start - 60, n);
-      const leftSec = (next.start - n) * 60;
-      cd.textContent = clockText(leftSec);
-      ringVal.style.strokeDashoffset = (100 - clamp(leftSec / Math.max(60, (next.start - base) * 60), 0, 1) * 100).toFixed(2);
-    }
-    const ni = el.focusBody.querySelector('[data-next-in]');
-    if (ni && next) {
-      const until = Math.ceil(next.start - n);
-      ni.textContent = until <= TRANSITION_MIN ? 'In ' + until + ' Min · langsam abschließen' : 'Als Nächstes · in ' + durText(until);
-      el.focusBody.querySelector('[data-next]').classList.toggle('soon', until <= TRANSITION_MIN);
-    }
+    html += halfHtml('am', 'Vormittag', am, nowId, catalog, 9 * 60) +
+      '<section class="fl-lunch"><b>Mittagspause</b><span>' + fmt(lunch.start) + '–' + fmt(lunch.end) + '</span></section>' +
+      halfHtml('pm', 'Nachmittag', pm, nowId, catalog, 14 * 60);
+    el.focusBody.innerHTML = html;
+  }
+  function rowSig(b) { return [b.id, b.title, b.done, b.start, b.dur, b.fixed === false, b.half, b.rank, b.type]; }
+  function halfHtml(half, title, rows, nowId, catalog, hintMin) {
+    const sug = TL.pickSuggestions(catalog, getDay(viewKey).blocks, hintMin).slice(0, 3);
+    const chips = sug.map((s) => '<button type="button" class="fl-chip t-' + s.type + '" data-fl="sug" data-half="' + half + '" data-title="' + esc(s.title) + '" data-type="' + s.type + '" data-dur="' + s.dur + '" data-icon="' + esc(s.icon || '') + '">' + esc(s.title) + '</button>').join('');
+    const list = rows.map((b) => {
+      const other = half === 'am' ? 'Nachmittag' : 'Vormittag';
+      const fixed = b.fixed !== false;
+      return '<li class="fl-row t-' + b.type + (b.done ? ' done' : '') + (b.id === nowId ? ' is-now' : '') + '" data-id="' + b.id + '" data-half="' + half + '">' +
+        '<button type="button" class="fl-done" data-fl="done" aria-label="' + (b.done ? 'Wieder öffnen' : 'Abhaken') + ': ' + esc(b.title) + '">' + icon(b.done ? 'check' : (b.icon || b.type)) + '</button>' +
+        '<button type="button" class="fl-main" data-fl="edit"><span class="fl-kicker">' + (b.id === nowId ? 'Jetzt' : '') + '</span><b>' + esc(b.title) + '</b>' +
+        '<small>' + (fixed ? fmt(b.start) + ' · fest' : durText(b.dur)) + '</small></button>' +
+        '<button type="button" class="fl-move" data-fl="half" data-to="' + (half === 'am' ? 'pm' : 'am') + '">nach ' + other + '</button>' +
+        '<div class="fl-grip" data-fl="grip" aria-hidden="true">' + icon('grip') + '</div></li>';
+    }).join('');
+    return '<section class="fl-half" data-half="' + half + '"><header><h2>' + title + '</h2></header>' +
+      (chips ? '<div class="fl-chips">' + chips + '</div>' : '') +
+      '<ul class="fl-list">' + (list || '<li class="fl-empty">Noch nichts.</li>') + '</ul>' +
+      '<form class="fl-add" data-half="' + half + '"><input type="text" name="title" maxlength="80" placeholder="Aufgabe, dann Enter" aria-label="Aufgabe für ' + title + '" enterkeyhint="done" autocomplete="off"></form></section>';
+  }
+  function focusHalfNow() {
+    const blocks = getDay(todayKey()).blocks;
+    const lunch = lunchOf(blocks);
+    return nowMin() < lunch.start ? 'am' : 'pm';
+  }
+  function addFlexTask(half, title, type, dur, iconName) {
+    const timed = TL.pullTime(title, dur || 30);
+    mutate('Aufgabe hinzugefügt.', () => {
+      const day = materialize(viewKey);
+      const lunch = lunchOf(day.blocks);
+      const rank = day.blocks.reduce((m, b) => Math.max(m, b.rank || 0), 0) + 1;
+      const block = normBlock({
+        title: timed ? timed.title : title,
+        type: type || 'quick',
+        dur: timed ? timed.dur : (dur || 30),
+        start: timed ? timed.start : (half === 'am' ? state.dayStart : lunch.end),
+        icon: iconName || null,
+        fixed: !!timed,
+        half: timed ? undefined : half,
+        rank: timed ? undefined : rank
+      });
+      if (timed) delete block.half;
+      day.blocks.push(block);
+    });
+  }
+  function moveHalf(id, half) {
+    mutate(half === 'pm' ? 'Nach Nachmittag.' : 'Nach Vormittag.', () => {
+      const day = materialize(viewKey);
+      const b = day.blocks.find((x) => x.id === id);
+      if (!b || b.lunch) return false;
+      b.half = half;
+      b.fixed = false;
+      b.rank = day.blocks.reduce((m, x) => Math.max(m, x.rank || 0), 0) + 1;
+    });
   }
 
   el.focusBody.addEventListener('click', (e) => {
-    const b = e.target.closest('[data-fact]');
-    if (!b) return;
-    const { cur, k } = nowInfo();
-    const act = b.dataset.fact;
-    if (act === 'add') { openEditor({ kind: 'block', day: k }); return; }
-    if (act === 'replan') { viewKey = k; replan(); return; }
-    if (act.startsWith('wrap-')) { wrapAction(act.slice(5)); return; }
-    if (!cur) return;
-    if (act === 'done') toggleDone(cur.id, k);
-    else if (act === 'plus5') mutate('5 Minuten verlängert.', () => { const x = materialize(k).blocks.find((y) => y.id === cur.id); x.dur = Math.min(x.dur + 5, 24 * 60 - x.start); });
-    else if (act === 'edit') { viewKey = k; openEditor({ kind: 'block', id: cur.id, day: k }); }
+    if (e.target.closest('[data-fl="tomorrow"]')) { wrapAction('tomorrow'); return; }
+    const sug = e.target.closest('[data-fl="sug"]');
+    if (sug) { addFlexTask(sug.dataset.half, sug.dataset.title, sug.dataset.type, Number(sug.dataset.dur), sug.dataset.icon || null); return; }
+    const row = e.target.closest('.fl-row');
+    if (!row) return;
+    if (e.target.closest('[data-fl="done"]')) { toggleDone(row.dataset.id, viewKey); return; }
+    if (e.target.closest('[data-fl="half"]')) { moveHalf(row.dataset.id, e.target.closest('[data-fl="half"]').dataset.to); return; }
+    if (e.target.closest('[data-fl="edit"]')) { openEditor({ kind: 'block', id: row.dataset.id, day: viewKey }); }
   });
-  el.focusBody.addEventListener('change', (e) => {
-    const cb = e.target.closest('[data-fsub]');
-    if (!cb) return;
-    const { cur, k } = nowInfo();
-    if (!cur) return;
-    mutate(null, () => { const s = materialize(k).blocks.find((y) => y.id === cur.id).subtasks.find((x) => x.id === cb.dataset.fsub); if (s) s.done = cb.checked; });
-    if (cb.checked) haptic();
+  el.focusBody.addEventListener('submit', (e) => {
+    const form = e.target.closest('.fl-add');
+    if (!form) return;
+    e.preventDefault();
+    const title = form.elements.title.value.trim();
+    if (!title) return;
+    form.elements.title.value = '';
+    addFlexTask(form.dataset.half, title);
   });
+  let flDrag = null;
+  el.focusBody.addEventListener('pointerdown', (e) => {
+    const grip = e.target.closest('[data-fl="grip"]');
+    if (!grip) return;
+    const row = grip.closest('.fl-row');
+    flDrag = { id: row.dataset.id, y0: e.clientY, pid: e.pointerId, row, on: false };
+    row.classList.add('fl-hold');
+  });
+  window.addEventListener('pointermove', (e) => {
+    if (!flDrag || e.pointerId !== flDrag.pid) return;
+    if (Math.abs(e.clientY - flDrag.y0) > 6) {
+      flDrag.on = true;
+      flDrag.row.classList.add('fl-dragging');
+      flDrag.row.style.transform = 'translateY(' + (e.clientY - flDrag.y0) + 'px)';
+    }
+  });
+  window.addEventListener('pointerup', (e) => {
+    if (!flDrag || e.pointerId !== flDrag.pid) return;
+    const d = flDrag;
+    flDrag = null;
+    d.row.classList.remove('fl-hold', 'fl-dragging');
+    d.row.style.transform = '';
+    if (!d.on) return;
+    d.row.style.pointerEvents = 'none';
+    const under = document.elementFromPoint(e.clientX, e.clientY);
+    d.row.style.pointerEvents = '';
+    const target = under && under.closest('.fl-row, .fl-half');
+    if (!target) return;
+    const half = target.dataset.half || (target.closest('.fl-half') || {}).dataset && target.closest('.fl-half').dataset.half;
+    const beforeId = target.classList && target.classList.contains('fl-row') ? target.dataset.id : null;
+    if (!half || beforeId === d.id) return;
+    const day = materialize(viewKey);
+    const moving = day.blocks.find((b) => b.id === d.id);
+    if (!moving || moving.lunch) return;
+    const lunch = lunchOf(day.blocks);
+    const flex = day.blocks.filter((b) => !b.lunch && b.fixed === false && b.id !== d.id && TL.halfOf(b, lunch.start, lunch.end) === half)
+      .sort((a, b) => (a.rank || 0) - (b.rank || 0));
+    const ids = flex.map((b) => b.id);
+    const at = beforeId && ids.indexOf(beforeId) >= 0 ? ids.indexOf(beforeId) : ids.length;
+    ids.splice(at, 0, d.id);
+    mutate('Reihenfolge geändert.', () => {
+      const live = materialize(viewKey);
+      const item = live.blocks.find((b) => b.id === d.id);
+      item.half = half;
+      item.fixed = false;
+      ids.forEach((id, i) => {
+        const b = live.blocks.find((x) => x.id === id);
+        if (b) { b.rank = i; if (b.id === d.id) { b.half = half; b.fixed = false; } }
+      });
+    });
+  });
+
 
   function setTab(t) {
     if (t !== 'plan') place = null;
@@ -1239,6 +1341,8 @@
     if (t === 'plan') { if (isToday()) scrollToNow(); else window.scrollTo(0, 0); } else window.scrollTo(0, 0);
   }
   $$('.tab[data-tab]').forEach((t) => t.addEventListener('click', () => setTab(t.dataset.tab)));
+  $('#focus-prev').addEventListener('click', () => { viewKey = addDays(viewKey, -1); focusSig = ''; render(); });
+  $('#focus-next').addEventListener('click', () => { viewKey = addDays(viewKey, 1); focusSig = ''; render(); });
 
   // ---------- Erinnerungen (lokal, opt-in) ----------
   let fired;
@@ -1698,7 +1802,7 @@
       });
       mutate(d.mode === 'resize' ? 'Dauer: ' + durText(d.cur.dur) + '.' : 'Verschoben auf ' + fmt(d.cur.start) + '.', () => {
         const x = materialize(viewKey).blocks.find((y) => y.id === d.id);
-        x.start = d.cur.start; x.dur = d.cur.dur;
+        x.start = d.cur.start; x.dur = d.cur.dur; x.fixed = true; delete x.half;
       }, canPush ? { also: { label: 'Nachfolgende verschieben', fn: () => pushFollowers(d.id) } } : undefined);
       settle(d.id, from);
       haptic();
@@ -1785,7 +1889,7 @@
     if (o.kind === 'block' && o.id) src = getDay(k).blocks.find((x) => x.id === o.id);
     if (o.kind === 'inbox' && o.id) src = state.inbox.find((x) => x.id === o.id);
     const dur = o.dur || 30;
-    const draft = src ? clone(src) : normBlock({ type: o.kind === 'inbox' ? 'quick' : 'deep', start: o.start != null ? o.start : suggestStart(dur, k), dur });
+    const draft = src ? clone(src) : normBlock({ type: o.kind === 'inbox' ? 'quick' : 'deep', start: o.start != null ? o.start : suggestStart(dur, k), dur, fixed: o.flex ? false : undefined, half: o.flex ? (o.half || 'am') : undefined });
     if (!src) draft.title = '';
     ed = { kind: o.kind, id: src ? src.id : null, day: k, draft, isNew: !src, autoStart: !src && o.start == null };
     f.name.value = draft.title;
@@ -1986,7 +2090,10 @@
     const d = ed.draft;
     d.title = f.name.value.trim() || TYPES[d.type].label;
     d.subtasks = d.subtasks.map((s) => ({ id: s.id, text: s.text.trim(), done: !!s.done })).filter((s) => s.text);
-    if (ed.kind === 'block') d.start = readStart();
+    if (ed.kind === 'block') {
+      d.start = readStart();
+      if (!ed.autoStart) d.fixed = true;
+    }
     return normBlock(d);
   }
 
@@ -2123,6 +2230,7 @@
     '<li class="t-' + t + '"><span class="mini-bubble">' + icon(t) + '</span><span><b>' + esc(typeLabel(t)) + (SIMPLE[t] ? ' <small>(' + esc(TYPES[t].label) + ')</small>' : '') + '</b><small>' + esc(TYPES[t].hint) + '</small></span></li>').join('');
   const s = {
     newDay: $('#s-newday'), contrast: $('#s-contrast'), hand: $('#s-hand'), start: $('#s-start'), end: $('#s-end'),
+    lunch: $('#s-lunch'), lunchDur: $('#s-lunch-dur'),
     sound: $('#s-sound'), vibrate: $('#s-vibrate'), notify: $('#s-notify')
   };
   function openMore() {
@@ -2135,6 +2243,9 @@
     $$('input[name="snap"]', el.more).forEach((r) => { r.checked = Number(r.value) === state.snap; });
     s.contrast.checked = state.contrast;
     s.hand.checked = state.leftHand;
+    s.lunch.innerHTML = [10, 11, 12, 13, 14].map((h) => '<option value="' + h * 60 + '">' + pad(h) + ':00</option>').join('');
+    s.lunch.value = String(state.lunchStart);
+    s.lunchDur.value = String(state.lunchDur);
     s.start.innerHTML = Array.from({ length: 23 }, (_, i) => '<option value="' + i * 60 + '">' + pad(i) + ':00</option>').join('');
     s.start.value = String(state.dayStart);
     fillEnd();
@@ -2182,6 +2293,13 @@
     else if (t === s.newDay) { state.newDay = t.value; clearDrafts(); save(); render(); }
     else if (t === s.start) { state.dayStart = Number(t.value); fillEnd(); state.dayEnd = Number(s.end.value); save(); render(); }
     else if (t === s.end) { state.dayEnd = Number(t.value); save(); render(); }
+    else if (t === s.lunch || t === s.lunchDur) {
+      state.lunchStart = Number(s.lunch.value);
+      state.lunchDur = Number(s.lunchDur.value);
+      syncLunchToday();
+      save();
+      render();
+    }
     else if (t === s.sound) { state.reminders.sound = t.checked; save(); if (t.checked) chime(); }
     else if (t === s.vibrate) { state.reminders.vibrate = t.checked; save(); haptic(); }
     else if (t === s.notify) {
@@ -2339,7 +2457,9 @@
   function addNew() {
     place = null;
     renderPlace();
-    openEditor({ kind: tab === 'inbox' ? 'inbox' : 'block', day: tab === 'plan' && !isPastDay() ? viewKey : todayKey() });
+    const dayKeyForNew = tab === 'plan' && !isPastDay() ? viewKey : todayKey();
+    const flex = tab === 'focus';
+    openEditor({ kind: tab === 'inbox' ? 'inbox' : 'block', day: dayKeyForNew, flex: flex, half: flex ? focusHalfNow() : undefined });
   }
   $('#fab').addEventListener('click', addNew);
 

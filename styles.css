@@ -581,7 +581,38 @@ body.placing .toast { bottom: calc(200px + env(safe-area-inset-bottom)); }
 .inbox-empty p { color: var(--ink-3); font-size: 14.5px; max-width: 34ch; margin-bottom: 10px; }
 
 /* =================== Fokus (Jetzt) =================== */
-.focus-body { max-width: 520px; margin: 0 auto; }
+.focus-body { max-width: 520px; margin: 0 auto; display: grid; gap: 14px; }
+.fl-wrap { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); }
+.fl-wrap p { margin: 0; font-weight: 700; }
+.fl-half { display: grid; gap: 8px; }
+.fl-half h2 { font-size: 15px; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-3); }
+.fl-chips { display: flex; gap: 6px; overflow-x: auto; }
+.fl-chip { flex: none; min-height: 36px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--c-tint); color: var(--ink); font-weight: 700; font-size: 13px; cursor: pointer; }
+.fl-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.fl-empty { color: var(--ink-3); padding: 8px 4px; }
+.fl-row {
+  display: grid; grid-template-columns: 48px minmax(0, 1fr) 44px; grid-template-rows: auto auto;
+  min-height: 64px; background: var(--surface); border-radius: 16px; overflow: hidden; border: 1px solid var(--line);
+}
+.fl-row.is-now { box-shadow: inset 0 0 0 2px var(--accent); }
+.fl-row.done { opacity: .55; }
+.fl-row.done b { text-decoration: line-through; }
+.fl-done, .fl-grip { flex: none; width: 48px; min-width: 48px; display: grid; place-items: center; border: 0; background: var(--c-solid); color: var(--c-on); cursor: pointer; }
+.fl-done { grid-column: 1; grid-row: 1 / span 2; }
+.fl-grip { grid-column: 3; grid-row: 1 / span 2; width: 44px; min-width: 44px; cursor: grab; touch-action: none; }
+.fl-main { grid-column: 2; grid-row: 1; min-width: 0; display: grid; align-content: center; gap: 2px; padding: 8px 10px 0; border: 0; background: transparent; text-align: left; color: inherit; cursor: pointer; }
+html[data-hand="left"] .fl-done { grid-column: 3; }
+html[data-hand="left"] .fl-grip { grid-column: 1; }
+.fl-kicker { min-height: 14px; font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--accent); }
+.fl-kicker:empty { display: none; }
+.fl-main b { font-size: 16px; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; hyphens: none; }
+.fl-main small { color: var(--ink-3); font-weight: 650; }
+.fl-move { grid-column: 2; grid-row: 2; justify-self: start; min-height: 36px; margin: 0 0 8px 10px; padding: 0 10px; border: 0; border-radius: 12px; background: var(--surface-2); color: var(--ink-2); font-size: 13px; font-weight: 750; cursor: pointer; }
+.fl-add input { width: 100%; min-height: 48px; padding: 0 14px; border-radius: 14px; border: 1.5px solid var(--line-strong); background: var(--bg); font-size: 16px; }
+.fl-lunch { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 14px; border-radius: 16px; background: var(--c-tint, var(--surface-2)); border: 1px dashed var(--line-strong); }
+.fl-lunch b { font-size: 15px; }
+.fl-row.fl-dragging { position: relative; z-index: 5; box-shadow: var(--shadow-lift); }
+.t-pause.fl-lunch, .fl-lunch { --c-solid: var(--line-strong); }
 .focus .view-head { max-width: 520px; margin: 0 auto; }
 .focus-clock { margin-left: auto; padding: 6px 12px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); font-size: 15px; font-weight: 750; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .focus-hero { display: grid; justify-items: center; text-align: center; padding: 8px 4px 4px; }

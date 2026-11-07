@@ -131,6 +131,34 @@ test('Überlappung bleibt markiert, Nachfolgende rücken nach', () => {
   assert.strictEqual(earlier.find((x) => x.id === 'early').start, 15 * 60);
 });
 
+test('Fokusliste legt freie Aufgaben in Lücken, feste Termine bleiben', () => {
+  const lunchStart = 12 * 60, lunchEnd = 13 * 60;
+  const blocks = [
+    { id: 'fest', title: 'Zahnarzt', start: 14 * 60 + 30, dur: 30, fixed: true },
+    { id: 'alt', title: 'Bestehend', start: 9 * 60, dur: 60 },
+    { id: 'frei', title: 'Schreiben', start: 0, dur: 30, fixed: false, half: 'am', rank: 1 },
+    { id: 'spater', title: 'Lesen', start: 0, dur: 45, fixed: false, half: 'pm', rank: 1 }
+  ];
+  assert.strictEqual(L.halfOf(blocks[0], lunchStart, lunchEnd), 'pm');
+  assert.strictEqual(L.halfOf(blocks[2], lunchStart, lunchEnd), 'am');
+  const placed = L.placeFlex(blocks, { dayStart: 8 * 60, dayEnd: 18 * 60, lunchStart, lunchEnd });
+  assert.strictEqual(placed.find((b) => b.id === 'fest'), undefined);
+  assert.strictEqual(placed.find((b) => b.id === 'alt'), undefined);
+  const frei = placed.find((b) => b.id === 'frei');
+  const les = placed.find((b) => b.id === 'spater');
+  assert.strictEqual(frei.start, 8 * 60);
+  assert.strictEqual(frei.dur, 30);
+  assert.ok(frei.start + frei.dur <= 9 * 60);
+  assert.ok(les.start >= lunchEnd);
+  assert.ok(les.start + les.dur <= 14 * 60 + 30 || les.start >= 15 * 60);
+  assert.strictEqual(les.dur, 45);
+  const order = L.placeFlex([
+    { id: 'a', start: 0, dur: 30, fixed: false, half: 'am', rank: 2 },
+    { id: 'b', start: 0, dur: 30, fixed: false, half: 'am', rank: 1 }
+  ], { dayStart: 8 * 60, dayEnd: 18 * 60, lunchStart, lunchEnd });
+  assert.ok(order.find((b) => b.id === 'b').start < order.find((b) => b.id === 'a').start);
+});
+
 test('Wischen nach rechts hakelt ab, senkrecht bleibt Scrollen', () => {
   assert.strictEqual(L.swipeDone(48, 0), true);
   assert.strictEqual(L.swipeDone(80, 20), true);
