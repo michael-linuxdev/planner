@@ -119,6 +119,10 @@
     return out.slice(0, 4);
   }
 
+  function swipeDone(dx, dy) {
+    return dx >= 48 && dx > Math.abs(dy) * 1.5;
+  }
+
   function pullTime(title, dur) {
     const m = /^(\d{1,2})[:.](\d{2})\s+(.+)$/.exec(String(title || '').trim());
     if (!m) return null;
@@ -129,5 +133,5 @@
     return { title: m[3].slice(0, 80), start: fit.start, dur: fit.dur };
   }
 
-  return { isSafeId, takeId, weekday, isWeekend, fitTime, ruleHits, icsUid, saveMessage, pullTime, isPristineTemplate, pickSuggestions, DAY };
+  return { isSafeId, takeId, weekday, isWeekend, fitTime, ruleHits, icsUid, saveMessage, pullTime, isPristineTemplate, pickSuggestions, swipeDone, DAY };
 });

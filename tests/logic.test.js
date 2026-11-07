@@ -108,6 +108,15 @@ test('Vorschläge kommen aus der Rolle und kennen die Lücken', () => {
   assert.strictEqual(full[0].title, 'Posts schreiben');
 });
 
+test('Wischen nach rechts hakelt ab, senkrecht bleibt Scrollen', () => {
+  assert.strictEqual(L.swipeDone(48, 0), true);
+  assert.strictEqual(L.swipeDone(80, 20), true);
+  assert.strictEqual(L.swipeDone(40, 0), false);
+  assert.strictEqual(L.swipeDone(48, 40), false);
+  assert.strictEqual(L.swipeDone(-60, 0), false);
+  assert.strictEqual(L.swipeDone(10, 4), false);
+});
+
 test('Erfolgstoast nur nach echtem Speichern', () => {
   assert.strictEqual(L.saveMessage(true, false, null), null);
   assert.strictEqual(L.saveMessage(true, false, 'Gespeichert.'), 'Gespeichert.');

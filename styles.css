@@ -330,13 +330,18 @@ body[data-tab="focus"] #focus, body[data-tab="plan"] #plan, body[data-tab="inbox
   text-align: right; font-size: 12.5px; font-weight: 650; color: var(--ink-3); font-variant-numeric: tabular-nums;
 }
 
-.item { position: absolute; touch-action: pan-y; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; transition: top .24s var(--ease), height .24s var(--ease); }
+.item {
+  position: absolute; display: flex; align-items: stretch; gap: 0;
+  touch-action: pan-y; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  transition: top .24s var(--ease), height .24s var(--ease);
+}
 .item:hover, .item:focus-within { z-index: 3; }
 .bubble {
-  position: absolute; left: 4px; top: 0; bottom: 0; width: 48px; min-height: 30px;
-  display: flex; align-items: flex-start; justify-content: center; padding-top: 12px; overflow: hidden;
-  background: var(--c-solid); color: var(--c-on); border-radius: 24px;
-  cursor: grab; touch-action: none; transition: box-shadow .6s ease, opacity .4s ease;
+  position: relative; flex: none; align-self: stretch; width: 48px; min-width: 48px; margin-right: 8px;
+  -webkit-appearance: none; appearance: none;
+  display: flex; align-items: flex-start; justify-content: center; padding: 12px 0 0; overflow: hidden;
+  border: 0; background: var(--c-solid); color: var(--c-on); border-radius: 24px;
+  cursor: pointer; touch-action: manipulation; transition: box-shadow .6s ease, opacity .4s ease;
 }
 .bubble .icon { position: relative; width: 22px; height: 22px; }
 .compact .bubble { align-items: center; padding-top: 0; }
@@ -347,20 +352,40 @@ body[data-tab="focus"] #focus, body[data-tab="plan"] #plan, body[data-tab="inbox
 .item:not(.current) .bubble-fill { display: none; }
 
 .card {
-  position: absolute; left: 56px; right: 0; top: 0; bottom: 0;
-  display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto;
+  position: relative; flex: 1; min-width: 0; height: auto;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center; align-content: start; column-gap: 4px; row-gap: 1px;
-  padding: 8px 6px 6px 12px; overflow: hidden;
-  background: var(--c-tint); border-radius: 16px; color: var(--ink);
-  cursor: pointer; transition: box-shadow .6s ease, opacity .4s ease, background-color .3s, transform .25s var(--ease);
+  padding: 8px 8px 6px 12px; overflow: hidden;
+  background: var(--c-tint); border-radius: 16px 0 0 16px; color: var(--ink);
+  cursor: pointer; transition: box-shadow .6s ease, opacity .4s ease, background-color .3s, transform .2s var(--ease);
   hyphens: manual; -webkit-hyphens: manual;
 }
+.grip {
+  position: relative; flex: none; width: 44px; min-width: 44px;
+  display: grid; place-items: center; align-self: stretch;
+  background: var(--c-solid); color: var(--c-on); border-radius: 0 16px 16px 0;
+  cursor: grab; touch-action: none; z-index: 2;
+}
+.grip .icon { width: 22px; height: 22px; }
+.t-buffer .grip { background: var(--bg); color: var(--c-solid); border: 2px dashed var(--c-solid); }
+.card { order: 2; }
+.grip { order: 3; }
+html[data-hand="left"] .bubble, html[data-hand="left"] .card-icon[data-done] { order: 3; margin-right: 0; margin-left: 8px; }
+html[data-hand="left"] .grip { order: 1; border-radius: 16px 0 0 16px; }
+html[data-hand="left"] .card { order: 2; border-radius: 0 16px 16px 0; }
+html[data-hand="left"] .timeline::before { left: auto; right: 24px; }
+html[data-hand="left"] .gridline { right: 64px; }
 @media (hover: hover) { .card:hover { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--c-solid) 40%, transparent); } }
-.nobubble .card { left: 0; }
+.nobubble .card { border-radius: 16px 0 0 16px; }
+html[data-hand="left"] .nobubble .card { border-radius: 0 16px 16px 0; }
+.card-icon[data-done] {
+  position: relative; flex: none; align-self: center; width: 44px; height: 44px; margin-right: 6px;
+  display: grid; place-items: center; border: 0; border-radius: 50%;
+  background: var(--c-solid); color: var(--c-on); cursor: pointer; touch-action: manipulation;
+}
+.card-icon .icon { width: 20px; height: 20px; }
 .t-buffer .card { border: 1.5px dashed color-mix(in srgb, var(--c-solid) 70%, transparent); background: transparent; }
 [data-contrast="high"] .card { box-shadow: inset 0 0 0 2px var(--c-solid); }
-.card-icon { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; flex: none; background: var(--c-solid); color: var(--c-on); }
-.card-icon .icon { width: 16px; height: 16px; }
 .card-text { min-width: 0; }
 .card-title {
   font-weight: 650; font-size: 16px; line-height: 1.25;
@@ -397,7 +422,6 @@ body[data-tab="focus"] #focus, body[data-tab="plan"] #plan, body[data-tab="inbox
 }
 .roomy .badge { grid-row: 3; grid-column: 2; }
 .roomy .sub-toggle { grid-row: 3; grid-column: 3; }
-.roomy .check { grid-row: 3; grid-column: 4; }
 .card { container-type: inline-size; }
 @container (max-width: 300px) { .card-dur { display: none; } }
 @container (max-width: 170px) { .compact .card-meta { display: none; } }
@@ -451,9 +475,10 @@ body[data-tab="focus"] #focus, body[data-tab="plan"] #plan, body[data-tab="inbox
 }
 .item.flash .card { animation: flash 1.3s ease; }
 @keyframes flash { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 60%, transparent); } 100% { box-shadow: 0 0 0 14px transparent; } }
-.item.pop .check { animation: pop .45s cubic-bezier(.3, 1.6, .5, 1); }
+.item.pop .bubble, .item.pop .card-icon { animation: pop .45s cubic-bezier(.3, 1.6, .5, 1); }
 @keyframes pop { 0% { transform: scale(.7); } 60% { transform: scale(1.18); } 100% { transform: scale(1); } }
-.burst { position: absolute; right: 22px; top: 50%; width: 0; height: 0; pointer-events: none; z-index: 5; }
+.burst { position: absolute; left: 22px; top: 18px; width: 0; height: 0; pointer-events: none; z-index: 5; }
+html[data-hand="left"] .burst { left: auto; right: 22px; }
 .compact .burst, .item:not(.compact) .burst { top: 22px; }
 .compact .burst { top: 50%; }
 .burst i { position: absolute; left: -3px; top: -3px; width: 6px; height: 6px; border-radius: 50%; background: var(--c-solid); animation: burst .7s ease-out forwards; }
@@ -464,10 +489,12 @@ body[data-tab="focus"] #focus, body[data-tab="plan"] #plan, body[data-tab="inbox
 
 /* Größe ändern: Griff mittig an der Unterkante (44 × 24 px Trefferfläche) */
 .resize {
-  position: absolute; bottom: -12px; left: calc(56px + (100% - 56px) / 2 - 22px); width: 44px; height: 24px;
+  position: absolute; bottom: -12px; left: 56px; right: 44px; width: auto; height: 24px;
   display: grid; place-items: center; cursor: ns-resize; touch-action: none; z-index: 4;
 }
-.nobubble .resize { left: calc(50% - 22px); }
+.nobubble .resize { left: 0; }
+html[data-hand="left"] .resize { left: 44px; right: 56px; }
+html[data-hand="left"] .nobubble .resize { left: 44px; right: 0; }
 .resize span { width: 26px; height: 5px; border-radius: 3px; background: var(--c-solid); opacity: 0; transition: opacity .15s; box-shadow: 0 0 0 2px var(--bg); }
 .item:hover .resize span, .item:focus-within .resize span, .item.dragging .resize span { opacity: .75; }
 @media (hover: none) { .resize span { opacity: .35; } }
@@ -477,7 +504,8 @@ body[data-tab="focus"] #focus, body[data-tab="plan"] #plan, body[data-tab="inbox
 .item.pressing .card { transform: scale(.975); box-shadow: 0 0 0 2px color-mix(in srgb, var(--c-solid) 55%, transparent); transition: transform .3s ease, box-shadow .3s ease; }
 .item.dragging { z-index: 30; transition: none; }
 .item.dragging .card { box-shadow: var(--shadow-lift), 0 0 0 2px var(--c-solid); }
-.item.dragging.is-moving .card, .item.dragging.is-moving .bubble { transform: scale(1.02); }
+.item.dragging.is-moving .card, .item.dragging.is-moving .bubble, .item.dragging.is-moving .grip { transform: scale(1.02); }
+.grip:active, .item.dragging .grip { cursor: grabbing; }
 .item.dragging .card, .item.dragging .bubble { transition: transform .18s var(--ease), box-shadow .18s var(--ease); }
 .item.dragging .badge:not(:empty) { background: var(--ink); color: var(--bg); }
 

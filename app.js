@@ -14,6 +14,7 @@
   const OLD_KEY = 'tagesplaner.v1';
   const KEEP_PAST_DAYS = 90;
   const BUBBLE = 56;             // Breite der Symbolspalte (Bubble + Abstand)
+  const GRIP = 44;               // Ziehgriff am Daumen, mindestens 44 px
 
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
@@ -240,7 +241,7 @@
   // ==================================================================
   function defaults() {
     return {
-      version: 2, role: null, palette: 'auto', theme: 'auto', contrast: false, snap: 5,
+      version: 2, role: null, palette: 'auto', theme: 'auto', contrast: false, leftHand: false, snap: 5,
       dayStart: 8 * 60, dayEnd: 18 * 60, newDay: 'role', custom: null,
       recurring: [], inbox: [], days: {},
       reminders: { sound: false, vibrate: false, notify: false },
@@ -288,6 +289,7 @@
     if (!['auto', 'cool', 'warm'].includes(st.palette)) st.palette = 'auto';
     if (!['auto', 'light', 'dark'].includes(st.theme)) st.theme = 'auto';
     if (!['role', 'custom', 'empty'].includes(st.newDay)) st.newDay = 'role';
+    st.leftHand = st.leftHand === true;
     st.dayStart = hourBound(st.dayStart, defaults().dayStart, 0, 22 * 60);
     st.dayEnd = hourBound(st.dayEnd, Math.max(defaults().dayEnd, st.dayStart + 120), st.dayStart + 120, 24 * 60);
     st.reminders = Object.assign(defaults().reminders, st.reminders || {});
@@ -445,6 +447,7 @@
     root.dataset.theme = theme;
     root.dataset.palette = activePalette();
     if (state.contrast) root.dataset.contrast = 'high'; else delete root.dataset.contrast;
+    root.dataset.hand = state.leftHand ? 'left' : 'right';
     // Statusleiste = echte Hintergrundfarbe (vorher leicht abweichend im Dunkelmodus)
     $('#meta-theme').setAttribute('content', theme === 'dark' ? (state.contrast ? '#000000' : '#121418') : (state.contrast ? '#ffffff' : '#f5f4f0'));
   }
@@ -986,24 +989,29 @@
       ? '<button type="button" class="sub-toggle no-drag" aria-expanded="' + open + '" aria-label="Unteraufgaben ' + (open ? 'zuklappen' : 'aufklappen') + ', ' + doneSubs + ' von ' + b.subtasks.length + ' erledigt">' + icon('chevron') + '<span>' + doneSubs + '/' + b.subtasks.length + '</span></button>'
       : '';
     const label = t.label + ': ' + b.title + ', ' + fmt(b.start) + ' bis ' + fmt(b.start + b.dur) + (b.done ? ', erledigt' : '');
+    const doneLabel = (b.done ? 'Wieder öffnen' : 'Abhaken') + ': ' + esc(b.title);
+    const hasBubble = pos.lane === 0;
+    const lead = (state.leftHand ? GRIP : 0) + (!state.leftHand && hasBubble ? BUBBLE : 0);
+    const tail = (!state.leftHand ? GRIP : 0) + (state.leftHand && hasBubble ? BUBBLE : 0);
     let html = '<div class="item t-' + b.type + (compact ? ' compact' : '') + (tiny ? ' tiny' : '') + (micro ? ' micro' : '') + (roomy ? ' roomy' : '') + (b.done ? ' done' : '') +
-      (pos.lane > 0 ? ' nobubble' : '') + (pos.lanes > 1 ? ' laned' : '') + (open ? ' open' : '') + '" data-id="' + b.id + '"' +
+      (hasBubble ? '' : ' nobubble') + (pos.lanes > 1 ? ' laned' : '') + (open ? ' open' : '') + '" data-id="' + b.id + '"' +
       ' style="top:' + top + 'px;height:' + h + 'px;left:' + box.left + ';width:' + box.width + '">' +
-      (pos.lane === 0 ? '<div class="bubble" data-grip title="Ziehen zum Verschieben"><span class="bubble-fill"></span>' + icon(b.done ? 'check' : ic) + '</div>' : '') +
+      (hasBubble
+        ? '<button type="button" class="bubble no-drag" data-done aria-pressed="' + b.done + '" aria-label="' + doneLabel + '"><span class="bubble-fill"></span>' + icon(b.done ? 'check' : ic) + '</button>'
+        : '<button type="button" class="card-icon no-drag" data-done aria-pressed="' + b.done + '" aria-label="' + doneLabel + '">' + icon(b.done ? 'check' : ic) + '</button>') +
       '<div class="card" tabindex="0" title="' + esc(b.title + ' · ' + fmt(b.start) + '–' + fmt(b.start + b.dur)) + '" aria-roledescription="Zeitblock" aria-label="' + esc(label) + '. Enter bearbeiten, Leertaste abhaken, Pfeiltasten verschieben, Umschalt+Pfeile Dauer.">' +
-        (pos.lane > 0 ? '<span class="card-icon">' + icon(ic) + '</span>' : '') +
         '<span class="card-meta"><span class="card-time">' + fmt(b.start) + '–' + fmt(b.start + b.dur) + '</span><span class="card-dur"> · ' + durText(b.dur) + '</span><span class="card-live"></span>' +
           (b.recurId ? '<span class="rep" title="Wiederholt sich">' + icon('repeat') + '</span>' : '') + '</span>' +
         '<span class="card-text"><span class="card-title">' + esc(b.title) + '</span></span>' +
         '<span class="badge"></span>' + sub +
-        '<button type="button" class="check no-drag" aria-pressed="' + b.done + '" aria-label="' + (b.done ? 'Wieder öffnen' : 'Abhaken') + ': ' + esc(b.title) + '">' + icon('check') + '</button>' +
       '</div>' +
+      '<div class="grip" data-grip aria-hidden="true">' + icon('grip') + '</div>' +
       '<div class="resize" title="Ziehen, um die Dauer zu ändern" aria-hidden="true"><span></span></div>' +
     '</div>';
     if (open) {
       let extraBefore = 0;
       for (const x of G.extras) { if (x.id === b.id) break; if (x.at === b.start + b.dur) extraBefore += x.h; }
-      html += '<div class="subpanel t-' + b.type + '" data-for="' + b.id + '" style="top:' + (yB(b.start + b.dur) + extraBefore) + 'px;height:' + (subPanelHeight(b) - 6) + 'px;left:' + box.cardLeft + ';width:calc(' + box.width + ' - ' + (pos.lane === 0 ? BUBBLE : 0) + 'px)">' +
+      html += '<div class="subpanel t-' + b.type + '" data-for="' + b.id + '" style="top:' + (yB(b.start + b.dur) + extraBefore) + 'px;height:' + (subPanelHeight(b) - 6) + 'px;left:calc(' + box.left + ' + ' + lead + 'px);width:calc(' + box.width + ' - ' + (lead + tail) + 'px)">' +
         '<ul>' + b.subtasks.map((s) => '<li><label class="check-row"><input type="checkbox" data-sub="' + s.id + '"' + (s.done ? ' checked' : '') + '><span>' + esc(s.text) + '</span></label></li>').join('') + '</ul>' +
         '<form class="sub-add"><input type="text" name="text" maxlength="80" placeholder="Unteraufgabe hinzufügen …" aria-label="Neue Unteraufgabe" enterkeyhint="done" autocomplete="off">' +
         '<button type="submit" class="icon-btn" aria-label="Hinzufügen">' + icon('plus') + '</button></form></div>';
@@ -1384,7 +1392,11 @@
     const b = getDay(k).blocks.find((x) => x.id === id);
     if (!b) return;
     const willDone = !b.done;
-    mutate(null, () => { materialize(k).blocks.find((x) => x.id === id).done = willDone; });
+    const p = dayProgress(k);
+    const finishes = willDone && p && b.type !== 'buffer' && p.done + 1 === p.total;
+    mutate(willDone ? (finishes ? 'Alles erledigt. Richtig stark!' : 'Abgehakt.') : 'Wieder geöffnet.', () => {
+      materialize(k).blocks.find((x) => x.id === id).done = willDone;
+    });
     if (willDone) {
       haptic();
       const node = itemNode(id);
@@ -1396,9 +1408,7 @@
         node.appendChild(burst);
         setTimeout(() => { node.classList.remove('pop'); burst.remove(); }, 900);
       }
-      const p = dayProgress(k);
-      if (p && p.done === p.total) toast('Alles erledigt. Richtig stark!');
-      else announce('Abgehakt: ' + b.title);
+      announce('Abgehakt: ' + b.title);
     }
   }
   function duplicateBlock(id) {
@@ -1436,8 +1446,8 @@
   // Klicks in der Zeitleiste
   el.items.addEventListener('click', (e) => {
     if (suppressClick) return;
-    const chk = e.target.closest('.item .check');
-    if (chk) { toggleDone(chk.closest('.item').dataset.id); return; }
+    const doneBtn = e.target.closest('.item [data-done]');
+    if (doneBtn) { toggleDone(doneBtn.closest('.item').dataset.id); return; }
     const tgl = e.target.closest('.sub-toggle');
     if (tgl) {
       const id = tgl.closest('.item').dataset.id;
@@ -1494,28 +1504,30 @@
   const minDur = () => 5;
 
   // ==================================================================
-  // Ziehen: Blöcke verschieben / Dauer ändern
-  //  Maus: ziehen ab 5 px · Touch: lange drücken oder sofort am Symbol (Bubble) ziehen
+  // Ziehen: Griff verschiebt, Unterkante ändert die Dauer.
+  // Tippen auf die Karte öffnet den Block. Tippen auf den Griff tut nichts.
+  // Wischen nach rechts hakelt ab.
   // ==================================================================
   let drag = null;
   let suppressClick = false;
 
   el.items.addEventListener('pointerdown', (e) => {
     if (drag || (e.pointerType === 'mouse' && e.button !== 0)) return;
-    if (e.target.closest('.no-drag, .subpanel')) return;
+    if (e.target.closest('.no-drag, .subpanel, [data-done]')) return;
     const item = e.target.closest('.item');
     if (!item) return;
     const b = findBlock(item.dataset.id);
     if (!b) return;
     const onResize = !!e.target.closest('.resize');
     const onGrip = !!e.target.closest('[data-grip]');
-    drag = { id: b.id, node: item, mode: onResize ? 'resize' : 'move', orig: { start: b.start, dur: b.dur }, cur: { start: b.start, dur: b.dur },
+    drag = { id: b.id, node: item, mode: onResize ? 'resize' : 'move', fromGrip: onGrip, swipe: false,
+      orig: { start: b.start, dur: b.dur }, cur: { start: b.start, dur: b.dur },
       pid: e.pointerId, ptype: e.pointerType, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, s0: window.scrollY, active: false, timer: null, raf: 0 };
     if (onResize || onGrip) { e.preventDefault(); activateDrag(); }
     else if (e.pointerType === 'touch') {
       const d = drag;
       item.classList.add('pressing');
-      d.timer = setTimeout(() => { if (drag === d && !d.active) { activateDrag(); haptic(); } }, LONG_PRESS_MS);
+      d.timer = setTimeout(() => { if (drag === d && !d.active && !d.swipe) { activateDrag(); haptic(); } }, LONG_PRESS_MS);
     }
     if (e.pointerType !== 'touch') { try { item.setPointerCapture(e.pointerId); } catch (_) { /* egal */ } }
   });
@@ -1563,9 +1575,28 @@
     if (!drag || e.pointerId !== drag.pid) return;
     drag.x = e.clientX; drag.y = e.clientY;
     if (!drag.active) {
-      const dist = Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0);
-      if (drag.ptype === 'touch') { if (dist > 8) { clearTimeout(drag.timer); drag.node.classList.remove('pressing'); drag = null; } }
-      else if (dist > 5) activateDrag();
+      const dx = e.clientX - drag.x0;
+      const dy = e.clientY - drag.y0;
+      const dist = Math.hypot(dx, dy);
+      if (!drag.fromGrip && dx > 12 && dx > Math.abs(dy)) {
+        clearTimeout(drag.timer);
+        drag.swipe = TL.swipeDone(dx, dy);
+        drag.node.classList.remove('pressing');
+        const card = drag.node.querySelector('.card');
+        if (card && !reducedMotion()) card.style.transform = 'translateX(' + Math.max(0, Math.min(dx, 72)) + 'px)';
+        e.preventDefault();
+        return;
+      }
+      if (drag.ptype === 'touch') {
+        if (dist > 8) {
+          clearTimeout(drag.timer);
+          drag.node.classList.remove('pressing');
+          const card = drag.node.querySelector('.card');
+          if (card) card.style.transform = '';
+          drag = null;
+        }
+      }
+      else if (dist > 5 && Math.abs(dy) >= dx) activateDrag();
       return;
     }
     e.preventDefault();
@@ -1627,7 +1658,18 @@
     cancelAnimationFrame(d.raf);
     document.body.classList.remove('is-dragging');
     d.node.classList.remove('pressing', 'dragging', 'is-moving', 'is-resizing');
+    const card = d.node.querySelector('.card');
+    if (card) card.style.transform = '';
     const moved = Math.hypot(e.clientX - d.x0, e.clientY - d.y0);
+    if (d.swipe) {
+      suppressClick = true;
+      setTimeout(() => { suppressClick = false; }, 80);
+      if (!cancelled && TL.swipeDone(e.clientX - d.x0, e.clientY - d.y0)) {
+        const b = findBlock(d.id);
+        if (b && !b.done) toggleDone(d.id);
+      }
+      return;
+    }
     if (d.active) {
       hideGhost();
       suppressClick = true;
@@ -1636,14 +1678,14 @@
       if (cancelled || moved < 8) {
         render();
         settle(d.id, from);
-        if (!cancelled && moved < 8 && d.mode === 'move') openEditor({ kind: 'block', id: d.id });
+        if (!cancelled && moved < 8 && d.mode === 'move' && !d.fromGrip) openEditor({ kind: 'block', id: d.id });
         return;
       }
       const b = findBlock(d.id);
       if (!b || (b.start === d.cur.start && b.dur === d.cur.dur)) {
         render();
         settle(d.id, from);
-        if (moved < 6 && d.mode === 'move') openEditor({ kind: 'block', id: d.id }); // Antippen der Bubble
+        if (moved < 6 && d.mode === 'move' && !d.fromGrip) openEditor({ kind: 'block', id: d.id });
         return;
       }
       mutate(d.mode === 'resize' ? 'Dauer: ' + durText(d.cur.dur) + '.' : 'Verschoben auf ' + fmt(d.cur.start) + '.', () => {
@@ -2072,7 +2114,7 @@
   $('#legend').innerHTML = TYPE_ORDER.map((t) =>
     '<li class="t-' + t + '"><span class="mini-bubble">' + icon(t) + '</span><span><b>' + esc(typeLabel(t)) + (SIMPLE[t] ? ' <small>(' + esc(TYPES[t].label) + ')</small>' : '') + '</b><small>' + esc(TYPES[t].hint) + '</small></span></li>').join('');
   const s = {
-    newDay: $('#s-newday'), contrast: $('#s-contrast'), start: $('#s-start'), end: $('#s-end'),
+    newDay: $('#s-newday'), contrast: $('#s-contrast'), hand: $('#s-hand'), start: $('#s-start'), end: $('#s-end'),
     sound: $('#s-sound'), vibrate: $('#s-vibrate'), notify: $('#s-notify')
   };
   function openMore() {
@@ -2084,6 +2126,7 @@
     $$('input[name="palette"]', el.more).forEach((r) => { r.checked = r.value === state.palette; });
     $$('input[name="snap"]', el.more).forEach((r) => { r.checked = Number(r.value) === state.snap; });
     s.contrast.checked = state.contrast;
+    s.hand.checked = state.leftHand;
     s.start.innerHTML = Array.from({ length: 23 }, (_, i) => '<option value="' + i * 60 + '">' + pad(i) + ':00</option>').join('');
     s.start.value = String(state.dayStart);
     fillEnd();
@@ -2127,6 +2170,7 @@
     else if (t.name === 'palette') { state.palette = t.value; save(); applyTheme(); }
     else if (t.name === 'snap') { state.snap = Number(t.value); save(); }
     else if (t === s.contrast) { state.contrast = t.checked; save(); applyTheme(); }
+    else if (t === s.hand) { state.leftHand = t.checked; save(); applyTheme(); render(); }
     else if (t === s.newDay) { state.newDay = t.value; clearDrafts(); save(); render(); }
     else if (t === s.start) { state.dayStart = Number(t.value); fillEnd(); state.dayEnd = Number(s.end.value); save(); render(); }
     else if (t === s.end) { state.dayEnd = Number(t.value); save(); render(); }
