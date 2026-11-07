@@ -81,6 +81,102 @@ test('Unberührte Wochenend-Vorlage ist erkennbar, bearbeitete nicht', () => {
   ], template), false);
 });
 
+test('Alte Arten werden zu Fokus oder Kleinkram', () => {
+  assert.strictEqual(L.canonicalType('deep'), 'deep');
+  assert.strictEqual(L.canonicalType('focused'), 'deep');
+  assert.strictEqual(L.canonicalType('reactive'), 'quick');
+  assert.strictEqual(L.canonicalType('flexible'), 'quick');
+  assert.strictEqual(L.canonicalType('meeting'), 'meeting');
+  assert.strictEqual(L.canonicalType('unbekannt'), 'quick');
+});
+
+test('Vorschläge kommen aus der Rolle und kennen die Lücken', () => {
+  const catalog = [
+    { title: 'Posts schreiben', type: 'deep', dur: 90, start: 9 * 60, icon: 'pen' },
+    { title: 'Pause', type: 'pause', dur: 15, start: 11 * 60, icon: 'pause' },
+    { title: 'Reporting', type: 'quick', dur: 30, start: 16 * 60, icon: 'chart' },
+    { title: 'Kundenabstimmung', type: 'meeting', dur: 45, start: 13 * 60, icon: 'phone' },
+    { title: 'Puffer', type: 'buffer', dur: 15, start: 12 * 60, icon: 'buffer' }
+  ];
+  const morning = L.pickSuggestions(catalog, [], 8 * 60 + 30);
+  assert.strictEqual(morning[0].title, 'Pause');
+  assert.strictEqual(morning[0].type, 'pause');
+  assert.ok(morning.some((s) => s.title === 'Posts schreiben'));
+  assert.ok(!morning.some((s) => s.type === 'buffer'));
+  assert.ok(morning.length <= 4);
+  const withPause = L.pickSuggestions(catalog, [{ title: 'Posts schreiben', type: 'deep' }], 8 * 60);
+  assert.ok(!withPause.some((s) => s.title === 'Posts schreiben'));
+  assert.strictEqual(withPause[0].type, 'pause');
+  const full = L.pickSuggestions(catalog, [
+    { title: 'Pause', type: 'pause' },
+    { title: 'Reporting', type: 'quick' },
+    { title: 'Kundenabstimmung', type: 'meeting' }
+  ], 16 * 60);
+  assert.ok(!full.some((s) => s.type === 'pause' && s.title === 'Pause'));
+  assert.ok(!full.some((s) => s.title === 'Reporting'));
+  assert.strictEqual(full[0].title, 'Posts schreiben');
+});
+
+test('Überlappung bleibt markiert, Nachfolgende rücken nach', () => {
+  const blocks = [
+    { id: 'a', start: 15 * 60 + 45, dur: 70 },
+    { id: 'b', start: 16 * 60 + 45, dur: 45 },
+    { id: 'c', start: 17 * 60 + 30, dur: 30 }
+  ];
+  const slices = L.overlapSlices(blocks);
+  const a = slices.find((s) => s.id === 'a').slices;
+  const b = slices.find((s) => s.id === 'b').slices;
+  assert.deepStrictEqual(a, [{ start: 16 * 60 + 45, end: 16 * 60 + 55 }]);
+  assert.deepStrictEqual(b, [{ start: 16 * 60 + 45, end: 16 * 60 + 55 }]);
+  assert.strictEqual(L.overlapSlices([{ id: 'a', start: 9 * 60, dur: 30 }, { id: 'b', start: 10 * 60, dur: 30 }]).length, 0);
+  const pushed = L.pushFollowing(blocks, 'a');
+  assert.strictEqual(pushed.find((x) => x.id === 'a').start, 15 * 60 + 45);
+  assert.strictEqual(pushed.find((x) => x.id === 'b').start, 16 * 60 + 55);
+  assert.strictEqual(pushed.find((x) => x.id === 'c').start, 16 * 60 + 55 + 45);
+  const earlier = L.pushFollowing([
+    { id: 'early', start: 15 * 60, dur: 90 },
+    { id: 'late', start: 16 * 60, dur: 30 }
+  ], 'late');
+  assert.strictEqual(earlier.find((x) => x.id === 'early').start, 15 * 60);
+});
+
+test('Fokusliste legt freie Aufgaben in Lücken, feste Termine bleiben', () => {
+  const lunchStart = 12 * 60, lunchEnd = 13 * 60;
+  const blocks = [
+    { id: 'fest', title: 'Zahnarzt', start: 14 * 60 + 30, dur: 30, fixed: true },
+    { id: 'alt', title: 'Bestehend', start: 9 * 60, dur: 60 },
+    { id: 'frei', title: 'Schreiben', start: 0, dur: 30, fixed: false, half: 'am', rank: 1 },
+    { id: 'spater', title: 'Lesen', start: 0, dur: 45, fixed: false, half: 'pm', rank: 1 }
+  ];
+  assert.strictEqual(L.halfOf(blocks[0], lunchStart, lunchEnd), 'pm');
+  assert.strictEqual(L.halfOf(blocks[2], lunchStart, lunchEnd), 'am');
+  const placed = L.placeFlex(blocks, { dayStart: 8 * 60, dayEnd: 18 * 60, lunchStart, lunchEnd });
+  assert.strictEqual(placed.find((b) => b.id === 'fest'), undefined);
+  assert.strictEqual(placed.find((b) => b.id === 'alt'), undefined);
+  const frei = placed.find((b) => b.id === 'frei');
+  const les = placed.find((b) => b.id === 'spater');
+  assert.strictEqual(frei.start, 8 * 60);
+  assert.strictEqual(frei.dur, 30);
+  assert.ok(frei.start + frei.dur <= 9 * 60);
+  assert.ok(les.start >= lunchEnd);
+  assert.ok(les.start + les.dur <= 14 * 60 + 30 || les.start >= 15 * 60);
+  assert.strictEqual(les.dur, 45);
+  const order = L.placeFlex([
+    { id: 'a', start: 0, dur: 30, fixed: false, half: 'am', rank: 2 },
+    { id: 'b', start: 0, dur: 30, fixed: false, half: 'am', rank: 1 }
+  ], { dayStart: 8 * 60, dayEnd: 18 * 60, lunchStart, lunchEnd });
+  assert.ok(order.find((b) => b.id === 'b').start < order.find((b) => b.id === 'a').start);
+});
+
+test('Wischen nach rechts hakelt ab, senkrecht bleibt Scrollen', () => {
+  assert.strictEqual(L.swipeDone(48, 0), true);
+  assert.strictEqual(L.swipeDone(80, 20), true);
+  assert.strictEqual(L.swipeDone(40, 0), false);
+  assert.strictEqual(L.swipeDone(48, 40), false);
+  assert.strictEqual(L.swipeDone(-60, 0), false);
+  assert.strictEqual(L.swipeDone(10, 4), false);
+});
+
 test('Erfolgstoast nur nach echtem Speichern', () => {
   assert.strictEqual(L.saveMessage(true, false, null), null);
   assert.strictEqual(L.saveMessage(true, false, 'Gespeichert.'), 'Gespeichert.');
