@@ -88,6 +88,37 @@
     return (blocks || []).filter((b) => b.recurId).every((b) => !b.done && !(b.subtasks || []).some((s) => s.done));
   }
 
+  function pickSuggestions(catalog, existing, nowMin) {
+    const have = new Set((existing || []).map((b) => b.title));
+    const hasPause = (existing || []).some((b) => b.type === 'pause');
+    const out = [];
+    if (!hasPause) {
+      const pause = (catalog || []).find((c) => c.type === 'pause');
+      out.push({
+        title: pause ? pause.title : 'Kurze Pause',
+        type: 'pause',
+        dur: pause && pause.dur ? pause.dur : 15,
+        icon: (pause && pause.icon) || 'pause'
+      });
+    }
+    const ranked = (catalog || [])
+      .filter((c) => c && c.type !== 'buffer' && !have.has(c.title))
+      .map((c) => ({
+        title: c.title,
+        type: c.type,
+        dur: c.dur,
+        icon: c.icon || c.type,
+        score: Math.abs((c.start == null ? nowMin : c.start) - nowMin)
+      }))
+      .sort((a, b) => a.score - b.score);
+    ranked.forEach((c) => {
+      if (out.length >= 4) return;
+      if (out.some((s) => s.title === c.title)) return;
+      out.push({ title: c.title, type: c.type, dur: c.dur, icon: c.icon });
+    });
+    return out.slice(0, 4);
+  }
+
   function pullTime(title, dur) {
     const m = /^(\d{1,2})[:.](\d{2})\s+(.+)$/.exec(String(title || '').trim());
     if (!m) return null;
@@ -98,5 +129,5 @@
     return { title: m[3].slice(0, 80), start: fit.start, dur: fit.dur };
   }
 
-  return { isSafeId, takeId, weekday, isWeekend, fitTime, ruleHits, icsUid, saveMessage, pullTime, isPristineTemplate, DAY };
+  return { isSafeId, takeId, weekday, isWeekend, fitTime, ruleHits, icsUid, saveMessage, pullTime, isPristineTemplate, pickSuggestions, DAY };
 });

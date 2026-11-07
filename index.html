@@ -82,7 +82,14 @@
             <button id="day-today" type="button" class="btn small pill" hidden>Heute</button>
           </div>
           <nav id="week" class="week" aria-label="Woche"></nav>
+          <div class="plan-switch" role="group" aria-label="Zeitraum">
+            <button type="button" data-span="day" aria-pressed="true">Tag</button>
+            <button type="button" data-span="week">Woche</button>
+            <button type="button" data-span="month">Monat</button>
+          </div>
         </header>
+        <div id="week-view" class="span-view" hidden></div>
+        <div id="month-view" class="span-view" hidden></div>
         <div id="plan-top"></div>
         <div id="timeline" class="timeline" aria-label="Zeitleiste">
           <div id="grid" class="grid" aria-hidden="true"></div>
@@ -123,6 +130,7 @@
         <button type="button" class="icon-btn" data-close aria-label="Schließen" data-icon="close"></button>
       </header>
       <div class="sheet-body">
+        <div id="ed-suggest" class="suggest" hidden></div>
         <div class="ed-hero">
           <button id="ed-icon-btn" type="button" class="ed-icon" aria-label="Symbol wählen" aria-expanded="false"></button>
           <label class="ed-title-field">
@@ -150,17 +158,21 @@
           <legend class="field-label">Dauer</legend>
           <div id="ed-chips" class="chips"></div>
         </fieldset>
-        <p id="ed-end" class="field-hint"></p>
+        <div class="field" id="ed-start-field">
+          <span class="field-label" id="ed-start-label">Start <span id="ed-end"></span></span>
+          <div class="timepick" role="group" aria-labelledby="ed-start-label">
+            <select id="ed-h" aria-label="Stunde"></select><span aria-hidden="true">:</span><select id="ed-m" aria-label="Minute"></select>
+          </div>
+          <div class="chips shift-chips" id="ed-shift">
+            <button type="button" class="chip" data-shift="next">Nächste Lücke</button>
+            <button type="button" class="chip" data-shift="15">+15</button>
+            <button type="button" class="chip" data-shift="30">+30</button>
+          </div>
+        </div>
 
         <details id="ed-detail" class="ed-detail">
-          <summary>Uhrzeit &amp; mehr</summary>
+          <summary>Wiederholen &amp; Unteraufgaben</summary>
           <div class="field-row">
-            <div class="field" id="ed-start-field">
-              <span class="field-label" id="ed-start-label">Start</span>
-              <div class="timepick" role="group" aria-labelledby="ed-start-label">
-                <select id="ed-h" aria-label="Stunde"></select><span aria-hidden="true">:</span><select id="ed-m" aria-label="Minute"></select>
-              </div>
-            </div>
             <div class="field">
               <span class="field-label" id="ed-dur-label">Eigene Dauer</span>
               <div class="stepper" role="group" aria-labelledby="ed-dur-label">

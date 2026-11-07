@@ -125,9 +125,9 @@
       name: 'Entwickler', icon: 'roleDev', palette: 'cool',
       desc: 'Fokus am Vormittag, Meetings gebündelt.',
       template: [
-        ['08:00', 15, 'quick', 'Ankommen & Tagesüberblick', ['Kalender ansehen', 'Top 3 für heute festlegen'], 'sun'],
-        ['08:15', 15, 'reactive', 'Chat & Mails sichten', ['Nur sichten, nicht alles beantworten'], 'mail'],
-        ['08:30', 15, 'meeting', 'Daily Stand-up', []],
+        ['08:00', 15, 'quick', 'Tagesüberblick', ['Kalender ansehen', 'Top 3 für heute festlegen'], 'sun'],
+        ['08:15', 15, 'reactive', 'Mails sichten', ['Nur sichten, nicht alles beantworten'], 'mail'],
+        ['08:30', 15, 'meeting', 'Stand-up', []],
         ['08:45', 15, 'buffer', 'Puffer', []],
         ['09:00', 120, 'deep', 'Feature entwickeln', ['Ticket & Akzeptanzkriterien lesen', 'Tests schreiben', 'Implementieren', 'Self-Review & Commit'], 'code'],
         ['11:00', 15, 'pause', 'Bewegungspause', ['Aufstehen, Wasser trinken'], 'walk'],
@@ -137,10 +137,10 @@
         ['13:00', 45, 'reactive', 'Bugs & Support-Anfragen', ['Tickets priorisieren', 'Kurz antworten']],
         ['13:45', 45, 'meeting', 'Refinement / Planung', []],
         ['14:30', 15, 'pause', 'Kurze Pause', []],
-        ['14:45', 90, 'deep', 'Deep Work II: Refactoring', ['Bereich auswählen', 'Schrittweise umbauen', 'Tests grün?'], 'code'],
+        ['14:45', 90, 'deep', 'Refactoring', ['Bereich auswählen', 'Schrittweise umbauen', 'Tests grün?'], 'code'],
         ['16:15', 15, 'buffer', 'Puffer', []],
-        ['16:30', 45, 'flexible', 'Lernen / Dokumentation', ['README ergänzen'], 'book'],
-        ['17:15', 30, 'quick', 'Admin: Zeiterfassung & Tickets', ['Zeiten buchen', 'Ticketstatus aktualisieren']],
+        ['16:30', 45, 'flexible', 'Dokumentation', ['README ergänzen'], 'book'],
+        ['17:15', 30, 'quick', 'Zeiten buchen', ['Zeiten buchen', 'Ticketstatus aktualisieren']],
         ['17:45', 15, 'quick', 'Tagesabschluss', ['Notizen für morgen', 'Rechner zuklappen'], 'moon']
       ]
     },
@@ -148,45 +148,45 @@
       name: 'Social Media Managerin', icon: 'roleSocial', palette: 'warm',
       desc: 'Kreativzeit zuerst, Community zu festen Zeiten.',
       template: [
-        ['08:00', 30, 'reactive', 'Community-Check: Kommentare & DMs', ['Dringendes beantworten', 'Rest markieren']],
-        ['08:30', 15, 'quick', 'Analytics-Snapshot', ['Reichweite von gestern notieren'], 'chart'],
-        ['08:45', 15, 'meeting', 'Team-Check-in', []],
-        ['09:00', 90, 'deep', 'Content erstellen', ['Reel-Skript schreiben', 'Grafiken gestalten', 'Captions & Hashtags'], 'camera'],
+        ['08:00', 30, 'reactive', 'Kommentare & DMs', ['Dringendes beantworten', 'Rest markieren']],
+        ['08:30', 15, 'quick', 'Zahlen von gestern', ['Reichweite von gestern notieren'], 'chart'],
+        ['08:45', 15, 'meeting', 'Team-Check', []],
+        ['09:00', 90, 'deep', 'Posts schreiben', ['Reel-Skript schreiben', 'Grafiken gestalten', 'Captions & Hashtags'], 'camera'],
         ['10:30', 15, 'pause', 'Pause', ['Bildschirm weg, kurz raus']],
-        ['10:45', 45, 'focused', 'Redaktionsplan pflegen', ['Nächste Woche füllen', 'Themen abstimmen'], 'calendar'],
-        ['11:30', 30, 'reactive', 'Community Management', []],
+        ['10:45', 45, 'focused', 'Redaktionsplan', ['Nächste Woche füllen', 'Themen abstimmen'], 'calendar'],
+        ['11:30', 30, 'reactive', 'Community', []],
         ['12:00', 45, 'pause', 'Mittagspause', [], 'food'],
         ['12:45', 15, 'buffer', 'Puffer', []],
-        ['13:00', 45, 'meeting', 'Abstimmung Kunde / Marketing', ['Freigaben einholen'], 'phone'],
-        ['13:45', 15, 'buffer', 'Notizen sortieren', []],
+        ['13:00', 45, 'meeting', 'Kundenabstimmung', ['Freigaben einholen'], 'phone'],
+        ['13:45', 15, 'buffer', 'Notizen', []],
         ['14:00', 60, 'focused', 'Posts einplanen', ['Instagram', 'LinkedIn', 'TikTok']],
-        ['15:00', 30, 'reactive', 'Kommentare & Trends', []],
+        ['15:00', 30, 'reactive', 'Trends', []],
         ['15:30', 15, 'pause', 'Kurze Pause', []],
-        ['15:45', 60, 'flexible', 'Trend-Recherche & Ideen', ['Ideen-Board ergänzen'], 'star'],
-        ['16:45', 45, 'quick', 'Reporting & Admin', ['Wochenzahlen eintragen', 'Mails'], 'chart'],
-        ['17:30', 30, 'reactive', 'Letzter Check & Abschluss', ['Morgen vorbereiten']]
+        ['15:45', 45, 'flexible', 'Ideen sammeln', ['Ideen-Board ergänzen'], 'star'],
+        ['16:45', 30, 'quick', 'Reporting', ['Wochenzahlen eintragen', 'Mails'], 'chart'],
+        ['17:30', 20, 'reactive', 'Abschluss', ['Morgen vorbereiten']]
       ]
     },
     care: {
       name: 'Erzieherin / Sozial', icon: 'roleCare', palette: 'cool',
       desc: 'Gruppenalltag mit echten Pausen.',
       template: [
-        ['08:00', 15, 'buffer', 'Ankommen & Raum vorbereiten', []],
-        ['08:15', 45, 'reactive', 'Bringzeit: Kinder begrüßen', ['Kurze Übergaben mit Eltern', 'Besonderheiten notieren'], 'child'],
+        ['08:00', 15, 'buffer', 'Raum vorbereiten', []],
+        ['08:15', 45, 'reactive', 'Bringzeit', ['Kurze Übergaben mit Eltern', 'Besonderheiten notieren'], 'child'],
         ['09:00', 15, 'meeting', 'Morgenkreis', [], 'smile'],
-        ['09:15', 75, 'focused', 'Angebot / Projektarbeit', ['Material bereitlegen', 'Kleingruppe A', 'Kleingruppe B'], 'pen'],
-        ['10:30', 30, 'flexible', 'Freispiel begleiten', []],
-        ['11:00', 45, 'focused', 'Draußen & Bewegung', ['Wetterkleidung prüfen'], 'sun'],
-        ['11:45', 45, 'reactive', 'Mittagessen begleiten', [], 'food'],
-        ['12:30', 30, 'pause', 'Eigene Pause', ['Wirklich raus aus der Gruppe']],
-        ['13:00', 60, 'deep', 'Dokumentation & Beobachtungen', ['Beobachtungsbögen', 'Portfolio-Einträge', 'Entwicklungsbericht'], 'pen'],
+        ['09:15', 60, 'focused', 'Projektarbeit', ['Material bereitlegen', 'Kleingruppe A', 'Kleingruppe B'], 'pen'],
+        ['10:30', 30, 'flexible', 'Freispiel', []],
+        ['11:00', 45, 'focused', 'Draußen', ['Wetterkleidung prüfen'], 'sun'],
+        ['11:45', 45, 'reactive', 'Mittagessen', [], 'food'],
+        ['12:30', 30, 'pause', 'Pause', ['Wirklich raus aus der Gruppe']],
+        ['13:00', 45, 'deep', 'Dokumentation', ['Beobachtungsbögen', 'Portfolio-Einträge', 'Entwicklungsbericht'], 'pen'],
         ['14:00', 15, 'buffer', 'Puffer', []],
-        ['14:15', 45, 'reactive', 'Abholzeit & Elternkontakt', [], 'child'],
+        ['14:15', 45, 'reactive', 'Abholzeit', [], 'child'],
         ['15:00', 15, 'pause', 'Kurze Pause', []],
-        ['15:15', 60, 'meeting', 'Teamsitzung / Fallbesprechung', ['Fälle vorbereiten']],
-        ['16:15', 30, 'quick', 'Admin: Listen, Mails, Bestellungen', [], 'mail'],
-        ['16:45', 45, 'flexible', 'Elterngespräch vorbereiten', ['Notizen sammeln', 'Termin bestätigen'], 'phone'],
-        ['17:30', 30, 'quick', 'Tagesabschluss & Übergabe', ['Übergabebuch', 'Raum aufräumen'], 'moon']
+        ['15:15', 45, 'meeting', 'Teamsitzung', ['Fälle vorbereiten']],
+        ['16:15', 30, 'quick', 'Listen & Mails', [], 'mail'],
+        ['16:45', 30, 'flexible', 'Elterngespräch', ['Notizen sammeln', 'Termin bestätigen'], 'phone'],
+        ['17:30', 20, 'quick', 'Übergabe', ['Übergabebuch', 'Raum aufräumen'], 'moon']
       ]
     }
   };
@@ -361,6 +361,7 @@
 
   let state = load();
   let viewKey = todayKey();
+  let planSpan = 'day';
   const drafts = {};          // erzeugte, noch nicht gespeicherte Tage (Zukunft)
   const openIds = new Set();  // aufgeklappte Unteraufgaben (nur Ansicht)
   let tab = 'focus';          // Start-Ansicht: Jetzt
@@ -630,6 +631,7 @@
     renderInbox();
     renderPlace();
     updateLive();
+    applyPlanSpan();
   }
 
   // ---------- Onboarding ----------
@@ -694,11 +696,26 @@
     return { done: list.filter((b) => b.done).length, total: list.length };
   }
   function renderHeader() {
-    el.dayName.textContent = relName(viewKey);
     const d = keyToDate(viewKey);
-    el.dayDate.textContent = (viewKey === todayKey() || Math.abs(d - keyToDate(todayKey())) <= 864e5 ? dateLong.format(d) : dateShort.format(d)) +
-      (demoMin !== null && isToday() ? ' · Demo ' + fmt(demoMin) : '');
-    el.dayToday.hidden = isToday();
+    if (planSpan === 'week') {
+      const monday = addDays(viewKey, -((weekday(viewKey) + 6) % 7));
+      el.dayName.textContent = 'Woche';
+      el.dayDate.textContent = dateShort.format(keyToDate(monday)) + ' – ' + dateShort.format(keyToDate(addDays(monday, 6)));
+    } else if (planSpan === 'month') {
+      el.dayName.textContent = new Intl.DateTimeFormat('de-DE', { month: 'long', year: 'numeric' }).format(d);
+      el.dayDate.textContent = '';
+    } else {
+      el.dayName.textContent = relName(viewKey);
+      el.dayDate.textContent = (viewKey === todayKey() || Math.abs(d - keyToDate(todayKey())) <= 864e5 ? dateLong.format(d) : dateShort.format(d)) +
+        (demoMin !== null && isToday() ? ' · Demo ' + fmt(demoMin) : '');
+    }
+    const t = todayKey();
+    let spanHasToday = isToday();
+    if (planSpan === 'week') {
+      const monday = addDays(viewKey, -((weekday(viewKey) + 6) % 7));
+      spanHasToday = t >= monday && t <= addDays(monday, 6);
+    } else if (planSpan === 'month') spanHasToday = viewKey.slice(0, 7) === t.slice(0, 7);
+    el.dayToday.hidden = spanHasToday;
     // Woche (Mo–So)
     const wd = (weekday(viewKey) + 6) % 7;
     const monday = addDays(viewKey, -wd);
@@ -721,10 +738,82 @@
     render();
     if (scroll !== false) { if (isToday()) scrollToNow(); else window.scrollTo(0, 0); }
   }
-  $('#day-prev').addEventListener('click', () => goDay(addDays(viewKey, -1)));
-  $('#day-next').addEventListener('click', () => goDay(addDays(viewKey, 1)));
+  function stepView(dir) {
+    if (planSpan === 'week') goDay(addDays(viewKey, dir * 7), false);
+    else if (planSpan === 'month') {
+      const d = keyToDate(viewKey);
+      const day = d.getDate();
+      d.setDate(1);
+      d.setMonth(d.getMonth() + dir);
+      const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+      d.setDate(Math.min(day, last));
+      goDay(dayKey(d), false);
+    } else goDay(addDays(viewKey, dir));
+  }
+  $('#day-prev').addEventListener('click', () => stepView(-1));
+  $('#day-next').addEventListener('click', () => stepView(1));
   el.dayToday.addEventListener('click', () => goDay(todayKey()));
-  el.week.addEventListener('click', (e) => { const b = e.target.closest('[data-day]'); if (b) goDay(b.dataset.day); });
+  el.week.addEventListener('click', (e) => { const b = e.target.closest('[data-day]'); if (b) { planSpan = 'day'; goDay(b.dataset.day); } });
+  $('#plan .plan-switch').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-span]');
+    if (!b || b.dataset.span === planSpan) return;
+    planSpan = b.dataset.span;
+    render();
+    window.scrollTo(0, 0);
+  });
+  function openSpanDay(k) { planSpan = 'day'; goDay(k); }
+  $('#week-view').addEventListener('click', (e) => { const b = e.target.closest('[data-open]'); if (b) openSpanDay(b.dataset.open); });
+  $('#month-view').addEventListener('click', (e) => { const b = e.target.closest('[data-open]'); if (b) openSpanDay(b.dataset.open); });
+
+  function applyPlanSpan() {
+    const day = planSpan === 'day';
+    el.timeline.hidden = !day;
+    el.planTop.hidden = !day;
+    el.week.hidden = !day;
+    $('#week-view').hidden = planSpan !== 'week';
+    $('#month-view').hidden = planSpan !== 'month';
+    $$('#plan .plan-switch button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.span === planSpan)));
+    const prev = planSpan === 'week' ? 'Vorherige Woche' : planSpan === 'month' ? 'Vorheriger Monat' : 'Vorheriger Tag';
+    const next = planSpan === 'week' ? 'Nächste Woche' : planSpan === 'month' ? 'Nächster Monat' : 'Nächster Tag';
+    $('#day-prev').setAttribute('aria-label', prev);
+    $('#day-next').setAttribute('aria-label', next);
+    if (planSpan === 'week') renderWeekBoard();
+    if (planSpan === 'month') renderMonthBoard();
+  }
+  function renderWeekBoard() {
+    const monday = addDays(viewKey, -((weekday(viewKey) + 6) % 7));
+    let html = '';
+    for (let i = 0; i < 7; i++) {
+      const k = addDays(monday, i);
+      const blocks = getDay(k).blocks.slice().sort((a, b) => a.start - b.start);
+      const bars = blocks.slice(0, 5).map((b) =>
+        '<i class="t-' + b.type + '">' + esc(fmt(b.start)) + ' ' + esc(b.title) + '</i>').join('');
+      html += '<button type="button" class="wk-day' + (k === todayKey() ? ' today' : '') + (k === viewKey ? ' sel' : '') + '" data-open="' + k + '">' +
+        '<span class="wk-h"><b>' + WD_SHORT[weekday(k)] + '</b><span>' + keyToDate(k).getDate() + '</span></span>' +
+        '<span class="wk-bars">' + (bars || '<em>Frei</em>') +
+        (blocks.length > 5 ? '<small>+' + (blocks.length - 5) + '</small>' : '') + '</span></button>';
+    }
+    $('#week-view').innerHTML = html;
+  }
+  function renderMonthBoard() {
+    const d0 = keyToDate(viewKey);
+    const y = d0.getFullYear(), m = d0.getMonth();
+    const padN = (weekday(y + '-' + pad(m + 1) + '-01') + 6) % 7;
+    const daysIn = new Date(y, m + 1, 0).getDate();
+    let html = '<div class="mo-dow">' + ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].map((x) => '<span>' + x + '</span>').join('') + '</div><div class="mo-grid">';
+    for (let i = 0; i < padN; i++) html += '<span class="mo-empty"></span>';
+    for (let day = 1; day <= daysIn; day++) {
+      const k = y + '-' + pad(m + 1) + '-' + pad(day);
+      const blocks = getDay(k).blocks;
+      const dots = blocks.slice(0, 3).map((b) => '<i class="t-' + b.type + '"></i>').join('');
+      html += '<button type="button" class="mo-day' + (k === todayKey() ? ' today' : '') + (k === viewKey ? ' sel' : '') + '" data-open="' + k + '" aria-label="' +
+        esc(dateLong.format(keyToDate(k))) + ', ' + blocks.length + ' Blöcke">' +
+        '<b>' + day + '</b><span class="mo-dots">' + dots + '</span>' +
+        (blocks.length ? '<small>' + blocks.length + '</small>' : '') + '</button>';
+    }
+    html += '</div>';
+    $('#month-view').innerHTML = html;
+  }
 
   // ---------- Karten über der Zeitleiste ----------
   function renderPlanTop() {
@@ -1664,11 +1753,63 @@
     renderTimePick();
     renderEdIcon();
     renderEditSubs();
+    renderSuggestions();
     syncKind();
     el.editor.showModal();
+    const sheetBody = el.editor.querySelector('.sheet-body');
+    if (sheetBody) sheetBody.scrollTop = 0;
     f.name.blur();
-    if (!src) setTimeout(() => f.name.focus(), 60);
+    if (!src) setTimeout(() => { f.name.focus({ preventScroll: true }); if (sheetBody) sheetBody.scrollTop = 0; }, 60);
   }
+  function renderSuggestions() {
+    const box = $('#ed-suggest');
+    if (!ed.isNew || ed.kind !== 'block' || !state.role) { box.hidden = true; box.innerHTML = ''; return; }
+    const catalog = fromTemplate(state.role).map((b) => ({ title: b.title, type: b.type, dur: b.dur, start: b.start, icon: b.icon || null }));
+    const now = ed.day === todayKey() ? nowMin() : 9 * 60;
+    const picks = TL.pickSuggestions(catalog, getDay(ed.day).blocks, now);
+    if (!picks.length) { box.hidden = true; box.innerHTML = ''; return; }
+    box.hidden = false;
+    box._picks = picks;
+    const kind = { deep: 'Fokus', focused: 'Konzentriert', reactive: 'Reaktiv', meeting: 'Termin', pause: 'Pause', buffer: 'Puffer', quick: 'Kleinkram', flexible: 'Flexibel' };
+    box.innerHTML = '<p class="field-label">Vorschläge</p><div class="suggest-row">' + picks.map((s, i) =>
+      '<button type="button" class="suggest-btn t-' + s.type + '" data-sug="' + i + '"><b>' + esc(s.title) + '</b><small>' +
+      esc(kind[s.type] || typeLabel(s.type)) + ' · ' + durText(s.dur) + '</small></button>').join('') + '</div>';
+  }
+  $('#ed-suggest').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-sug]');
+    if (!b || !ed) return;
+    const s = $('#ed-suggest')._picks[Number(b.dataset.sug)];
+    if (!s) return;
+    ed.draft.title = s.title;
+    ed.draft.type = s.type;
+    ed.draft.dur = s.dur;
+    ed.draft.icon = s.icon && ICONS[s.icon] ? s.icon : null;
+    ed.draft.start = suggestStart(s.dur, ed.day, ed.id);
+    ed.autoStart = true;
+    ed.kind = 'block';
+    f.name.value = s.title;
+    const radio = $('#ed-form input[name="type"][value="' + s.type + '"]');
+    if (radio) radio.checked = true;
+    setMoreTypes(!SIMPLE[s.type]);
+    $$('input[name="when"]', el.editor).forEach((r) => { r.checked = r.value === 'block'; });
+    renderTimePick();
+    renderEdIcon();
+    syncKind();
+  });
+  $('#ed-shift').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-shift]');
+    if (!b || !ed) return;
+    if (b.dataset.shift === 'next') {
+      ed.draft.start = suggestStart(ed.draft.dur, ed.day, ed.id);
+      ed.autoStart = true;
+    } else {
+      const fitted = TL.fitTime(ed.draft.start + Number(b.dataset.shift), ed.draft.dur);
+      ed.draft.start = fitted.start;
+      ed.autoStart = false;
+    }
+    renderTimePick();
+    renderDur();
+  });
   function syncKind() {
     const isBlock = ed.kind === 'block', existing = !ed.isNew;
     $('#ed-title').textContent = ed.isNew
@@ -1692,6 +1833,7 @@
   $('#ed-when').addEventListener('change', (e) => {
     ed.kind = e.target.value;
     if (ed.kind === 'block' && ed.autoStart) { ed.draft.start = suggestStart(ed.draft.dur, ed.day); renderTimePick(); }
+    renderSuggestions();
     syncKind();
   });
 

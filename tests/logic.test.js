@@ -81,6 +81,33 @@ test('Unberührte Wochenend-Vorlage ist erkennbar, bearbeitete nicht', () => {
   ], template), false);
 });
 
+test('Vorschläge kommen aus der Rolle und kennen die Lücken', () => {
+  const catalog = [
+    { title: 'Posts schreiben', type: 'deep', dur: 90, start: 9 * 60, icon: 'pen' },
+    { title: 'Pause', type: 'pause', dur: 15, start: 11 * 60, icon: 'pause' },
+    { title: 'Reporting', type: 'quick', dur: 30, start: 16 * 60, icon: 'chart' },
+    { title: 'Kundenabstimmung', type: 'meeting', dur: 45, start: 13 * 60, icon: 'phone' },
+    { title: 'Puffer', type: 'buffer', dur: 15, start: 12 * 60, icon: 'buffer' }
+  ];
+  const morning = L.pickSuggestions(catalog, [], 8 * 60 + 30);
+  assert.strictEqual(morning[0].title, 'Pause');
+  assert.strictEqual(morning[0].type, 'pause');
+  assert.ok(morning.some((s) => s.title === 'Posts schreiben'));
+  assert.ok(!morning.some((s) => s.type === 'buffer'));
+  assert.ok(morning.length <= 4);
+  const withPause = L.pickSuggestions(catalog, [{ title: 'Posts schreiben', type: 'deep' }], 8 * 60);
+  assert.ok(!withPause.some((s) => s.title === 'Posts schreiben'));
+  assert.strictEqual(withPause[0].type, 'pause');
+  const full = L.pickSuggestions(catalog, [
+    { title: 'Pause', type: 'pause' },
+    { title: 'Reporting', type: 'quick' },
+    { title: 'Kundenabstimmung', type: 'meeting' }
+  ], 16 * 60);
+  assert.ok(!full.some((s) => s.type === 'pause' && s.title === 'Pause'));
+  assert.ok(!full.some((s) => s.title === 'Reporting'));
+  assert.strictEqual(full[0].title, 'Posts schreiben');
+});
+
 test('Erfolgstoast nur nach echtem Speichern', () => {
   assert.strictEqual(L.saveMessage(true, false, null), null);
   assert.strictEqual(L.saveMessage(true, false, 'Gespeichert.'), 'Gespeichert.');
