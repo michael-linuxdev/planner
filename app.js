@@ -667,7 +667,11 @@
     mutate(first ? null : 'Rolle gewechselt.', () => {
       state.role = id;
       clearDrafts();
-      state.days[viewKey] = { blocks: baseBlocks('role').concat(recurringFor(viewKey)), energy: (state.days[viewKey] || {}).energy || null };
+      const weekend = TL.isWeekend(viewKey);
+      const blocks = (weekend && first ? [] : baseBlocks('role')).concat(recurringFor(viewKey));
+      const day = { blocks, energy: (state.days[viewKey] || {}).energy || null };
+      if (!first && weekend) day.keepTemplate = true;
+      state.days[viewKey] = day;
     });
     scrollToNow();
     if (first) announce('Plan für ' + ROLES[id].name + ' geladen.');
@@ -899,11 +903,9 @@
       (pos.lane === 0 ? '<div class="bubble" data-grip title="Ziehen zum Verschieben"><span class="bubble-fill"></span>' + icon(b.done ? 'check' : ic) + '</div>' : '') +
       '<div class="card" tabindex="0" title="' + esc(b.title + ' · ' + fmt(b.start) + '–' + fmt(b.start + b.dur)) + '" aria-roledescription="Zeitblock" aria-label="' + esc(label) + '. Enter bearbeiten, Leertaste abhaken, Pfeiltasten verschieben, Umschalt+Pfeile Dauer.">' +
         (pos.lane > 0 ? '<span class="card-icon">' + icon(ic) + '</span>' : '') +
-        '<span class="card-text">' +
-          '<span class="card-title">' + esc(b.title) + '</span>' +
-          '<span class="card-meta"><span class="card-time">' + fmt(b.start) + '–' + fmt(b.start + b.dur) + '</span><span class="card-dur"> · ' + durText(b.dur) + '</span><span class="card-live"></span>' +
+        '<span class="card-meta"><span class="card-time">' + fmt(b.start) + '–' + fmt(b.start + b.dur) + '</span><span class="card-dur"> · ' + durText(b.dur) + '</span><span class="card-live"></span>' +
           (b.recurId ? '<span class="rep" title="Wiederholt sich">' + icon('repeat') + '</span>' : '') + '</span>' +
-        '</span>' +
+        '<span class="card-text"><span class="card-title">' + esc(b.title) + '</span></span>' +
         '<span class="badge"></span>' + sub +
         '<button type="button" class="check no-drag" aria-pressed="' + b.done + '" aria-label="' + (b.done ? 'Wieder öffnen' : 'Abhaken') + ': ' + esc(b.title) + '">' + icon('check') + '</button>' +
       '</div>' +
@@ -2016,7 +2018,9 @@
     if (!v) return;
     mutate('Tag neu geplant.', () => {
       const en = (state.days[k] || {}).energy || null;
-      state.days[k] = { blocks: baseBlocks(v).concat(recurringFor(k)), energy: en };
+      const day = { blocks: baseBlocks(v).concat(recurringFor(k)), energy: en };
+      if (v === 'role' && TL.isWeekend(k)) day.keepTemplate = true;
+      state.days[k] = day;
       openIds.clear();
     });
     if (isToday()) scrollToNow();
@@ -2181,6 +2185,22 @@
   // Start
   // ==================================================================
   if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+  function scrubUntouchedWeekends() {
+    if (!state.role || !ROLES[state.role]) return;
+    const today = todayKey();
+    const template = fromTemplate(state.role);
+    let changed = false;
+    Object.keys(state.days).forEach((k) => {
+      if (!TL.isWeekend(k) || k < today) return;
+      const day = state.days[k];
+      if (!day || day.keepTemplate) return;
+      if (!TL.isPristineTemplate(day.blocks, template)) return;
+      day.blocks = (day.blocks || []).filter((b) => b.recurId);
+      changed = true;
+    });
+    if (changed) save();
+  }
+  scrubUntouchedWeekends();
   render();
   if (!persistOk) toast(TL.saveMessage(false, true, null));
   window.scrollTo(0, 0);
