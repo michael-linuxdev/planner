@@ -1,0 +1,22 @@
+name: Icons aus Base64 erzeugen
+on:
+  push:
+    branches: [main]
+    paths: ['icons/*.b64']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  decode:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: PNGs dekodieren
+        run: |
+          for f in icons/*.png.b64; do base64 -d "$f" > "${f%.b64}"; git rm -q "$f"; done
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add icons/*.png
+          git commit -m "Icons als PNG hinzufügen" && git push
