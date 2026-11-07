@@ -1,6 +1,6 @@
 # Tagesplaner
 
-Eine ruhige Seite: was jetzt dran ist, und was danach kommt.
+Was jetzt dran ist, und der Tag als Bild.
 Alles bleibt im Browser (`localStorage`, Schlüssel `tagesplaner.v2`). Kein Konto, keine Cloud.
 
 Live: **<https://planner.micana.de>**
@@ -8,12 +8,15 @@ Live: **<https://planner.micana.de>**
 ## Bedienung
 
 1. **Los**
-2. Unten eine Zeile schreiben und Enter. Sie dauert 30 Minuten und landet in der nächsten freien Lücke.
-3. **Fertig**, wenn sie durch ist.
+2. Oben den Tag wählen. Wischen oder die Pfeile wechseln die Woche.
+3. Unten eine Zeile und Enter.
+   - `einkaufen` landet frei in der nächsten Lücke.
+   - `14:30 Zahnarzt` ist ein fester Termin.
+   - `morgen 9:00 Arzt` oder `Montag Team` gilt für einen anderen Tag.
+4. **Fertig**, wenn es durch ist.
+5. Einen Block antippen: Titel, Uhrzeit, Dauer, löschen. Ziehen verschiebt ihn.
 
-Eine Zeile antippen ändert den Text oder löscht sie. Was gestern offen blieb, liegt am nächsten Tag wieder da.
-
-Hell und Dunkel folgen dem Gerät. Unteraufgaben, die schon gespeichert sind, bleiben in den Daten, werden aber nicht mehr abgefragt.
+Feste Termine bleiben am Tag. Nur freie Aufgaben rutschen auf den nächsten Tag, wenn sie offen bleiben. Alte Pläne ohne dieses Kennzeichen bleiben, wo sie sind.
 
 ## Lokal
 
@@ -24,8 +27,4 @@ python3 -m http.server 8000
 
 `node tests/logic.test.js`
 
-Nach Änderungen an den Dateien `CACHE` in `sw.js` erhöhen.
-
-## Daten
-
-Alte Pläne, Serien, Vorlagen und die Später-Liste bleiben beim Laden erhalten und werden nicht gelöscht. Die Oberfläche legt daraus keine neuen Tage mehr an und bietet keine Rollen, kein Raster, keinen Kalender-Export und keine Erinnerungen. `?zeit=HH:MM` setzt nur die angezeigte Uhrzeit.
+Nach Änderungen an den Dateien `CACHE` in `sw.js` erhöhen. `?zeit=HH:MM` setzt nur die angezeigte Uhrzeit.

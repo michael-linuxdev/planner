@@ -1,14 +1,16 @@
-/* Tagesplaner – eine Ansicht, eine Aktion. Daten bleiben lokal. */
+/* Tagesplaner – Jetzt, danach, und der Tag als Bild. */
 'use strict';
 
 (function () {
   const L = window.TagesplanerLogic;
   const KEY = 'tagesplaner.v2';
   const KEEP_DAYS = 90;
-  const ADD_MIN = 30;
+  const PPM = 2.2;
+  const TL_PAD = 18;
+  const WD = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+  const NAMES = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
 
   const $ = (s) => document.querySelector(s);
-
   function h(tag, attrs, text) {
     const n = document.createElement(tag);
     if (attrs) {
@@ -34,6 +36,9 @@
   let busy = false;
   let liveHeroId = null;
   let ed = null;
+  let drag = null;
+  let suppressClick = false;
+  let span = { start: 8 * 60, end: 18 * 60 };
 
   const dateFmt = new Intl.DateTimeFormat('de-DE', { weekday: 'long', day: 'numeric', month: 'long' });
 
@@ -49,6 +54,7 @@
     return d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60;
   }
   let lastToday = todayKey();
+  let viewKey = todayKey();
 
   function collectUsed() {
     const used = new Set();
@@ -63,17 +69,12 @@
     Object.keys(state.days || {}).forEach((k) => (state.days[k].blocks || []).forEach(walk));
     return used;
   }
-
-  function clearDrafts() {
-    Object.keys(drafts).forEach((k) => delete drafts[k]);
-  }
-
+  function clearDrafts() { Object.keys(drafts).forEach((k) => delete drafts[k]); }
   function getDay(k) {
     if (state.days[k]) return state.days[k];
     if (!drafts[k]) drafts[k] = { blocks: [], energy: null };
     return drafts[k];
   }
-
   function materialize(k) {
     if (!state.days[k]) {
       state.days[k] = getDay(k);
@@ -81,7 +82,6 @@
     }
     return state.days[k];
   }
-
   function save() {
     if (!persistAllowed) return false;
     try {
@@ -89,17 +89,11 @@
       Object.keys(state.days).forEach((k) => { if (k < cutoff) delete state.days[k]; });
       localStorage.setItem(KEY, JSON.stringify(state));
       return true;
-    } catch (e) {
-      return false;
-    }
+    } catch (e) { return false; }
   }
 
   let toastTimer = null;
-  function hideToast() {
-    const t = $('#toast');
-    t.hidden = true;
-    t.replaceChildren();
-  }
+  function hideToast() { const t = $('#toast'); t.hidden = true; t.replaceChildren(); }
   function toast(msg, action) {
     const t = $('#toast');
     t.replaceChildren(h('span', null, msg));
@@ -113,19 +107,14 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(hideToast, act && act.fn ? 5000 : 2200);
   }
-
   function undo() {
     const snap = undoStack.pop();
     if (!snap) return;
     state = JSON.parse(snap);
     clearDrafts();
-    if (!save()) {
-      toast(L.saveToast(false, !persistAllowed, null).text);
-      return;
-    }
+    if (!save()) { toast(L.saveToast(false, !persistAllowed, null).text); return; }
     render();
   }
-
   function commit(label, fn) {
     if (busy) return false;
     busy = true;
@@ -150,19 +139,15 @@
       try { state = JSON.parse(snap); } catch (_) { /* bleibt */ }
       toast('Das hat nicht geklappt.');
       return false;
-    } finally {
-      busy = false;
-    }
+    } finally { busy = false; }
   }
 
   function carryForward(fromKey, toKey) {
     const src = state.days[fromKey];
     if (!src || !src.blocks) return;
-    const open = L.openTasks(src.blocks);
+    const open = src.blocks.filter(L.canMove);
     if (!open.length) return;
-    const plan = L.planTomorrow(open, getDay(toKey).blocks, {
-      dayStart: state.dayStart, dayEnd: state.dayEnd
-    });
+    const plan = L.planTomorrow(open, getDay(toKey).blocks, { dayStart: state.dayStart, dayEnd: state.dayEnd });
     if (!plan.placed.length) return;
     const snap = JSON.stringify(state);
     try {
@@ -171,10 +156,7 @@
       plan.placed.forEach((copy) => dest.blocks.push(L.normBlock(copy, used)));
       const drop = new Set(plan.removeIds);
       src.blocks = src.blocks.filter((b) => !drop.has(b.id));
-      if (!save()) {
-        state = JSON.parse(snap);
-        clearDrafts();
-      }
+      if (!save()) { state = JSON.parse(snap); clearDrafts(); }
     } catch (e) {
       try { state = JSON.parse(snap); } catch (_) { /* bleibt */ }
       clearDrafts();
@@ -194,7 +176,15 @@
   function safeBlocks(day) {
     return (day && day.blocks || []).filter((b) => b && L.isSafeId(b.id));
   }
-
+  function findBlock(id, k) {
+    return safeBlocks(getDay(k || viewKey)).find((b) => b.id === id) || null;
+  }
+  function relName(k, today) {
+    if (k === today) return L.greeting(nowMin());
+    if (k === L.addDays(today, 1)) return 'Morgen';
+    if (k === L.addDays(today, -1)) return 'Gestern';
+    return NAMES[L.weekday(k)];
+  }
   function focusOf(info, n) {
     const current = info.cur && !info.cur.done ? info.cur : null;
     if (current) return { block: current, overdue: false };
@@ -205,9 +195,7 @@
 
   function section(node, build) {
     try { build(); }
-    catch (e) {
-      node.replaceChildren(h('p', { class: 'muted' }, 'Dieser Teil lässt sich gerade nicht anzeigen.'));
-    }
+    catch (e) { node.replaceChildren(h('p', { class: 'muted' }, 'Dieser Teil lässt sich gerade nicht anzeigen.')); }
   }
 
   function render() {
@@ -225,23 +213,58 @@
       banner.textContent = 'Die gespeicherten Daten sind beschädigt und werden nicht überschrieben.';
     } else banner.hidden = true;
 
-    const k = todayKey();
+    const today = todayKey();
     const n = nowMin();
-    const blocks = safeBlocks(getDay(k));
-    const info = L.nowInfo(blocks, n);
-    const focus = focusOf(info, n);
+    const onToday = viewKey === today;
+    $('#greet').textContent = relName(viewKey, today);
+    $('#when').textContent = dateFmt.format(L.keyToDate(viewKey)) + (onToday ? ' · ' + L.fmt(Math.floor(n)) : '');
+    $('#jump-today').hidden = onToday;
+    renderWeek(today);
+
+    const blocks = safeBlocks(getDay(viewKey));
+    const info = onToday ? L.nowInfo(blocks, n) : { cur: null, next: null, list: blocks.slice().sort((a, b) => a.start - b.start) };
+    const focus = onToday ? focusOf(info, n) : { block: null, overdue: false };
     liveHeroId = focus.block ? focus.block.id : null;
-    $('#greet').textContent = L.greeting(n);
-    $('#when').textContent = dateFmt.format(nowDate()) + ' · ' + L.fmt(Math.floor(n));
-    section($('#hero'), () => renderHero(focus, info, n));
-    section($('#next'), () => renderNext(info.next, focus.block));
-    section($('#rest'), () => renderRest(info, focus.block, n));
+    section($('#hero'), () => renderHero(onToday, focus, info, n));
+    section($('#next'), () => renderNext(onToday ? info.next : null, focus.block));
+    section($('#dayview'), () => renderTimeline(blocks, onToday, n));
     section($('#inbox-sec'), () => renderInbox());
+    maybeScroll();
   }
 
-  function renderHero(focus, info, n) {
+  let scrolledFor = null;
+  function maybeScroll() {
+    if (scrolledFor === viewKey) return;
+    scrolledFor = viewKey;
+    requestAnimationFrame(() => {
+      const target = viewKey === todayKey() ? $('#now-line') : $('#timeline');
+      if (!target || target.hidden) return;
+      const top = target.getBoundingClientRect().top + window.scrollY - (viewKey === todayKey() ? 210 : 120);
+      window.scrollTo(0, Math.max(0, top));
+    });
+  }
+
+  function renderWeek(today) {
+    const host = $('#week');
+    host.replaceChildren();
+    L.weekKeys(viewKey).forEach((k, i) => {
+      const b = h('button', {
+        type: 'button',
+        class: 'wday' + (k === viewKey ? ' sel' : '') + (k === today ? ' today' : '')
+      });
+      b.append(h('span', { class: 'wd' }, WD[i]), h('span', { class: 'dn' }, String(L.keyToDate(k).getDate())));
+      b.setAttribute('aria-label', dateFmt.format(L.keyToDate(k)));
+      if (k === viewKey) b.setAttribute('aria-current', 'date');
+      b.addEventListener('click', () => { viewKey = k; render(); });
+      host.append(b);
+    });
+  }
+
+  function renderHero(onToday, focus, info, n) {
     const host = $('#hero');
     host.replaceChildren();
+    if (!onToday) { host.hidden = true; return; }
+    host.hidden = false;
     const hero = focus.block;
     if (!hero) {
       host.append(h('h1', { class: 'hero-title' }, info.next ? 'Gerade ist frei.' : 'Heute ist frei.'));
@@ -252,21 +275,10 @@
     if (!focus.overdue) {
       host.append(h('p', { class: 'remain', id: 'remain' }, 'noch ' + L.durText(Math.max(0, Math.ceil(hero.start + hero.dur - n)))));
     }
-    host.append(h('p', { class: 'muted' }, L.rangeLabel(hero.start, hero.dur)));
+    host.append(h('p', { class: 'muted' }, (hero.fixed === true ? 'Fest · ' : '') + L.rangeLabel(hero.start, hero.dur)));
     const btn = h('button', { type: 'button', class: 'btn' }, 'Fertig');
     btn.addEventListener('click', () => finish(hero.id));
     host.append(btn);
-  }
-
-  function blockButton(b) {
-    const btn = h('button', { type: 'button', class: 'row' });
-    btn.append(h('span', { class: 'row-time' }, L.fmt(b.start)));
-    const text = h('span', { class: 'row-text' });
-    text.append(h('span', { class: 'row-title' }, b.title));
-    text.append(h('span', { class: 'row-meta' }, L.durText(b.dur)));
-    btn.append(text);
-    btn.addEventListener('click', () => openEditor(b));
-    return btn;
   }
 
   function renderNext(next, hero) {
@@ -275,21 +287,63 @@
     if (!next || next === hero) { host.hidden = true; return; }
     host.hidden = false;
     host.append(h('h2', { class: 'sec-title' }, 'Danach'));
-    host.append(blockButton(next));
+    const btn = h('button', { type: 'button', class: 'row' });
+    btn.append(h('span', { class: 'row-time' }, L.fmt(next.start)));
+    const text = h('span', { class: 'row-text' });
+    text.append(h('span', { class: 'row-title' }, next.title));
+    text.append(h('span', { class: 'row-meta' }, (next.fixed === true ? 'Fest · ' : '') + L.durText(next.dur)));
+    btn.append(text);
+    btn.addEventListener('click', () => openEditor(next));
+    host.append(btn);
   }
 
-  function renderRest(info, hero, n) {
-    const host = $('#rest');
-    host.replaceChildren();
-    const rest = info.list.filter((b) => {
-      if (b === hero || b === info.next || b.done) return false;
-      if (b.start > n) return true;
-      return L.isOpenTask(b);
+  function renderTimeline(blocks, onToday, n) {
+    let start = state.dayStart;
+    let end = state.dayEnd;
+    blocks.forEach((b) => {
+      start = Math.min(start, Math.floor(b.start / 60) * 60);
+      end = Math.max(end, Math.ceil((b.start + b.dur) / 60) * 60);
     });
-    if (!rest.length) { host.hidden = true; return; }
-    host.hidden = false;
-    host.append(h('h2', { class: 'sec-title' }, 'Heute noch'));
-    rest.forEach((b) => host.append(blockButton(b)));
+    end = Math.min(L.DAY, Math.max(end, start + 120));
+    span = { start, end };
+    const height = TL_PAD + (end - start) * PPM + 12;
+    const tl = $('#timeline');
+    tl.style.height = height + 'px';
+    const hours = $('#hours');
+    hours.replaceChildren();
+    for (let m = start; m <= end; m += 60) {
+      const line = h('div', { class: 'hour' });
+      line.style.top = (TL_PAD + (m - start) * PPM) + 'px';
+      line.append(h('span', null, L.fmt(m)));
+      hours.append(line);
+    }
+    const host = $('#tblocks');
+    host.replaceChildren();
+    if (!blocks.length) host.append(h('p', { class: 'empty-day' }, 'Noch nichts an diesem Tag.'));
+    const lanes = L.layoutLanes(blocks);
+    blocks.forEach((b) => {
+      const pos = lanes.get(b.id) || { lane: 0, lanes: 1 };
+      const btn = h('button', { type: 'button', class: 'tblock t-' + (b.type || 'focused') + (b.fixed === true ? ' is-fixed' : b.fixed === false ? ' is-free' : '') });
+      const top = TL_PAD + (b.start - start) * PPM;
+      const hgt = Math.max(48, b.dur * PPM);
+      btn.style.top = top + 'px';
+      btn.style.height = hgt + 'px';
+      const width = 100 / pos.lanes;
+      btn.style.left = (pos.lane * width) + '%';
+      btn.style.width = 'calc(' + width + '% - 6px)';
+      btn.dataset.id = b.id;
+      btn.dataset.start = String(b.start);
+      btn.append(h('span', { class: 'tb-time' }, L.rangeLabel(b.start, b.dur)));
+      btn.append(h('span', { class: 'tb-title' }, b.title));
+      if (b.fixed === true) btn.append(h('span', { class: 'tb-tag' }, 'Fest'));
+      else if (b.fixed === false) btn.append(h('span', { class: 'tb-tag' }, 'Frei'));
+      host.append(btn);
+    });
+    const now = $('#now-line');
+    const showNow = onToday && n >= start && n <= end;
+    now.hidden = !showNow;
+    if (showNow) now.style.top = (TL_PAD + (n - start) * PPM) + 'px';
+    $('#day-label').hidden = true;
   }
 
   function renderInbox() {
@@ -317,42 +371,74 @@
   function scheduleInbox(id) {
     const item = state.inbox.find((x) => x.id === id);
     if (!item) return;
-    const k = todayKey();
-    const dur = L.clampTime(0, item.dur || ADD_MIN).dur;
-    const start = L.suggestStart(getDay(k).blocks, dur, {
-      nowMin: nowMin(), isToday: true, dayStart: state.dayStart, dayEnd: state.dayEnd
+    const dur = L.clampTime(0, item.dur || 30).dur;
+    const start = L.suggestStart(getDay(viewKey).blocks, dur, {
+      nowMin: nowMin(), isToday: viewKey === todayKey(), dayStart: state.dayStart, dayEnd: state.dayEnd
     });
     commit(null, () => {
       const used = collectUsed();
       used.delete(id);
-      materialize(k).blocks.push(L.normBlock({
-        id: item.id, title: item.title, type: item.type, icon: item.icon,
-        start, dur, subtasks: item.subtasks, done: false
+      materialize(viewKey).blocks.push(L.normBlock({
+        id: item.id, title: item.title, type: item.type || 'focused', icon: item.icon,
+        start, dur, subtasks: item.subtasks, done: false, fixed: false
       }, used));
       state.inbox = state.inbox.filter((x) => x.id !== id);
     });
   }
 
   function addTask(title) {
-    const text = title.trim();
-    if (!text) return;
-    const k = todayKey();
-    const start = L.suggestStart(getDay(k).blocks, ADD_MIN, {
-      nowMin: nowMin(), isToday: true, dayStart: state.dayStart, dayEnd: state.dayEnd
-    });
+    const parsed = L.parseQuick(title, { today: todayKey(), selected: viewKey });
+    if (!parsed) return;
+    const day = parsed.day;
+    const existing = getDay(day).blocks;
+    const placed = parsed.fixed
+      ? L.clampTime(parsed.start, parsed.dur)
+      : L.clampTime(L.suggestStart(existing, parsed.dur, {
+        nowMin: nowMin(), isToday: day === todayKey(), dayStart: state.dayStart, dayEnd: state.dayEnd
+      }), parsed.dur);
+    viewKey = day;
     const ok = commit(null, () => {
-      materialize(k).blocks.push(L.normBlock({
-        title: text, type: 'focused', dur: ADD_MIN, start
+      materialize(day).blocks.push(L.normBlock({
+        title: parsed.title,
+        type: parsed.fixed ? 'meeting' : 'focused',
+        start: placed.start,
+        dur: placed.dur,
+        fixed: parsed.fixed
       }, collectUsed()));
     });
     if (ok) $('#add-title').value = '';
   }
 
+  function ensureMinute(min) {
+    const sel = $('#ed-m');
+    if (![...sel.options].some((o) => Number(o.value) === min)) {
+      const opt = h('option', { value: String(min) }, L.fmt(min).slice(3));
+      sel.append(opt);
+      [...sel.options].sort((a, b) => Number(a.value) - Number(b.value)).forEach((o) => sel.append(o));
+    }
+  }
+
+  function paintEditor() {
+    if (!ed) return;
+    const t = L.clampTime(ed.start, ed.dur);
+    ed.start = t.start;
+    ed.dur = t.dur;
+    ensureMinute(t.start % 60);
+    $('#ed-h').value = String(Math.floor(t.start / 60));
+    $('#ed-m').value = String(t.start % 60);
+    $('#ed-when').textContent = (ed.fixed ? 'Fest' : 'Frei') + ' · ' + L.rangeLabel(t.start, t.dur);
+    document.querySelectorAll('[data-ed-dur]').forEach((b) => {
+      b.setAttribute('aria-pressed', String(Number(b.dataset.edDur) === t.dur));
+    });
+    $('#ed-fest').setAttribute('aria-pressed', String(ed.fixed));
+    $('#ed-frei').setAttribute('aria-pressed', String(!ed.fixed));
+  }
+
   function openEditor(block) {
     const time = L.clampTime(block.start, block.dur);
-    ed = { id: block.id, start: time.start, dur: time.dur };
+    ed = { id: block.id, start: time.start, dur: time.dur, fixed: block.fixed === true };
     $('#ed-title').value = block.title;
-    $('#ed-when').textContent = L.rangeLabel(time.start, time.dur);
+    paintEditor();
     $('#editor').showModal();
     $('#ed-title').focus();
   }
@@ -361,12 +447,16 @@
     if (!ed || busy) return;
     const title = $('#ed-title').value.trim();
     const current = ed;
+    const shown = L.clampTime(current.start, current.dur);
     $('#editor').close();
     ed = null;
     commit(null, () => {
-      const b = materialize(todayKey()).blocks.find((x) => x.id === current.id);
+      const b = materialize(viewKey).blocks.find((x) => x.id === current.id);
       if (!b) return;
       if (title) b.title = title.slice(0, 80);
+      b.start = shown.start;
+      b.dur = shown.dur;
+      b.fixed = current.fixed;
     });
   }
 
@@ -376,7 +466,7 @@
     $('#editor').close();
     ed = null;
     commit('Gelöscht', () => {
-      const day = materialize(todayKey());
+      const day = materialize(viewKey);
       day.blocks = day.blocks.filter((x) => x.id !== id);
     });
   }
@@ -386,22 +476,27 @@
     if (t !== lastToday) {
       const prev = lastToday;
       lastToday = t;
+      if (viewKey === prev) viewKey = t;
       carryForward(prev, t);
       clearDrafts();
       render();
       return;
     }
-    if ($('#app').hidden) return;
+    if ($('#app').hidden || drag) return;
     const n = nowMin();
-    const clock = $('#when');
-    if (clock) clock.textContent = dateFmt.format(nowDate()) + ' · ' + L.fmt(Math.floor(n));
-    const info = L.nowInfo(safeBlocks(getDay(t)), n);
-    const focus = focusOf(info, n);
-    const id = focus.block ? focus.block.id : null;
-    if (id !== liveHeroId) { render(); return; }
-    const remain = $('#remain');
-    if (remain && focus.block && !focus.overdue) {
-      remain.textContent = 'noch ' + L.durText(Math.max(0, Math.ceil(focus.block.start + focus.block.dur - n)));
+    if (viewKey === t) {
+      const clock = $('#when');
+      if (clock) clock.textContent = dateFmt.format(L.keyToDate(viewKey)) + ' · ' + L.fmt(Math.floor(n));
+      const info = L.nowInfo(safeBlocks(getDay(t)), n);
+      const focus = focusOf(info, n);
+      const id = focus.block ? focus.block.id : null;
+      if (id !== liveHeroId) { render(); return; }
+      const remain = $('#remain');
+      if (remain && focus.block && !focus.overdue) {
+        remain.textContent = 'noch ' + L.durText(Math.max(0, Math.ceil(focus.block.start + focus.block.dur - n)));
+      }
+      const now = $('#now-line');
+      if (now && !now.hidden) now.style.top = (TL_PAD + (n - span.start) * PPM) + 'px';
     }
   }
 
@@ -422,6 +517,19 @@
     setTimeout(() => { addLock = false; }, 0);
   });
 
+  $('#week-prev').addEventListener('click', () => { viewKey = L.addDays(viewKey, -7); render(); });
+  $('#week-next').addEventListener('click', () => { viewKey = L.addDays(viewKey, 7); render(); });
+  $('#jump-today').addEventListener('click', () => { viewKey = todayKey(); render(); });
+  let swipeX = null;
+  $('#week').addEventListener('pointerdown', (e) => { swipeX = e.clientX; });
+  $('#week').addEventListener('pointerup', (e) => {
+    if (swipeX == null) return;
+    const dx = e.clientX - swipeX;
+    swipeX = null;
+    if (dx > 48) { viewKey = L.addDays(viewKey, -7); render(); }
+    else if (dx < -48) { viewKey = L.addDays(viewKey, 7); render(); }
+  });
+
   let editLock = false;
   $('#ed-form').addEventListener('submit', (e) => {
     e.preventDefault();
@@ -431,8 +539,81 @@
     setTimeout(() => { editLock = false; }, 0);
   });
   $('#ed-delete').addEventListener('click', deleteCurrent);
+  $('#ed-h').innerHTML = Array.from({ length: 24 }, (_, i) => '<option value="' + i + '">' + String(i).padStart(2, '0') + '</option>').join('');
+  $('#ed-m').innerHTML = Array.from({ length: 12 }, (_, i) => '<option value="' + (i * 5) + '">' + String(i * 5).padStart(2, '0') + '</option>').join('');
+  $('#ed-h').addEventListener('change', () => {
+    if (!ed) return;
+    ed.start = Number($('#ed-h').value) * 60 + (ed.start % 60);
+    ed.fixed = true;
+    paintEditor();
+  });
+  $('#ed-m').addEventListener('change', () => {
+    if (!ed) return;
+    ed.start = Math.floor(ed.start / 60) * 60 + Number($('#ed-m').value);
+    ed.fixed = true;
+    paintEditor();
+  });
+  document.querySelectorAll('[data-ed-dur]').forEach((b) => b.addEventListener('click', () => {
+    if (!ed) return;
+    ed.dur = Number(b.dataset.edDur);
+    paintEditor();
+  }));
+  $('#ed-fest').addEventListener('click', () => { if (!ed) return; ed.fixed = true; paintEditor(); });
+  $('#ed-frei').addEventListener('click', () => { if (!ed) return; ed.fixed = false; paintEditor(); });
   $('#editor').addEventListener('close', () => { ed = null; });
   $('#editor').addEventListener('click', (e) => { if (e.target === $('#editor')) $('#editor').close(); });
+
+  $('#tblocks').addEventListener('pointerdown', (e) => {
+    const node = e.target.closest('.tblock');
+    if (!node || drag) return;
+    drag = {
+      id: node.dataset.id,
+      node,
+      y0: e.clientY,
+      start0: Number(node.dataset.start),
+      start: Number(node.dataset.start),
+      moved: false,
+      pid: e.pointerId
+    };
+  });
+  window.addEventListener('pointermove', (e) => {
+    if (!drag || e.pointerId !== drag.pid) return;
+    const dy = e.clientY - drag.y0;
+    if (!drag.moved && Math.abs(dy) < 8) return;
+    drag.moved = true;
+    e.preventDefault();
+    const raw = drag.start0 + dy / PPM;
+    const snapped = Math.round(raw / 15) * 15;
+    const block = findBlock(drag.id);
+    const dur = block ? block.dur : 30;
+    drag.start = L.clampTime(snapped, dur).start;
+    drag.node.style.top = (TL_PAD + (drag.start - span.start) * PPM) + 'px';
+    const time = drag.node.querySelector('.tb-time');
+    if (time && block) time.textContent = L.rangeLabel(drag.start, dur);
+  }, { passive: false });
+  window.addEventListener('pointerup', (e) => endDrag(e));
+  window.addEventListener('pointercancel', (e) => endDrag(e));
+  function endDrag(e) {
+    if (!drag || e.pointerId !== drag.pid) return;
+    const d = drag;
+    drag = null;
+    if (!d.moved) return;
+    suppressClick = true;
+    setTimeout(() => { suppressClick = false; }, 250);
+    if (d.start === d.start0) { render(); return; }
+    commit(null, () => {
+      const b = materialize(viewKey).blocks.find((x) => x.id === d.id);
+      if (!b) return;
+      b.start = L.clampTime(d.start, b.dur).start;
+    });
+  }
+  $('#tblocks').addEventListener('click', (e) => {
+    if (suppressClick) return;
+    const node = e.target.closest('.tblock');
+    if (!node) return;
+    const block = findBlock(node.dataset.id);
+    if (block) openEditor(block);
+  });
 
   const darkMQ = matchMedia('(prefers-color-scheme: dark)');
   if (darkMQ.addEventListener) darkMQ.addEventListener('change', () => { if (state.theme === 'auto') applyTheme(); });
@@ -453,6 +634,7 @@
   render();
   window.__tagesplaner = {
     get state() { return state; },
+    get viewKey() { return viewKey; },
     get persistAllowed() { return persistAllowed; }
   };
 })();
