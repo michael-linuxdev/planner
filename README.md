@@ -10,8 +10,8 @@ Live: **<https://planner.micana.de>**
 
 | Ansicht | Was du siehst |
 |---|---|
-| **Jetzt** (Start) | Der laufende Block mit Countdown-Ring, Unteraufgaben zum Abhaken, „Erledigt“, „+5 Min“ und was als Nächstes kommt. Außerhalb geplanter Zeit: ruhiger Hinweis („Gleich geht’s los“, „Freie Zeit“, „Feierabend“). |
-| **Heute** | Tag, Woche oder Monat. Tag: Zeitleiste mit farbigen Symbol-Bubbles, Jetzt-Linie, Tagesfortschritt. Woche: die sieben Tage mit Blöcken. Monat: Kalender mit Punkten und Anzahl. |
+| **Fokus** (Start) | Vormittag und Nachmittag als Liste, dazwischen die feste Mittagspause. Die oberste offene Aufgabe der aktuellen Hälfte ist „Jetzt“. Dieselben Blöcke wie in der Zeitleiste. |
+| **Heute** | Tag, Woche oder Monat. Tag: Zeitleiste. Zum Verschieben den Griff rechts ziehen. Zum Ändern der Dauer die Unterkante ziehen. Zum Abhaken das Symbol links tippen. Überlappende Blöcke bleiben in voller Breite und sind schraffiert. Unter Mehr lässt sich die Lage für Linkshänder spiegeln. Woche: die sieben Tage mit Blöcken. Monat: Kalender mit Punkten und Anzahl. |
 | **Später** | Alles ohne Uhrzeit. „Einplanen“ → im Plan auf eine Uhrzeit tippen (oder „Nächste Lücke“). |
 
 Alles andere steckt im Menü **Mehr**: Tag abschließen, Tag neu planen, In Kalender übernehmen (.ics), Energie-Check-in, Vorlagen, Rolle, Darstellung (Hell/Dunkel, Kontrast, Farben, Tagesbereich, Raster), Erinnerungen, Sicherung.
@@ -22,9 +22,9 @@ Alles andere steckt im Menü **Mehr**: Tag abschließen, Tag neu planen, In Kale
 |---|---|
 | Neu anlegen | Der große **+**-Knopf. Titel, Art (Fokus · Termin · Pause · Kleinkram), Dauer (5/15/30/60 Min) – Start ist automatisch die nächste freie Lücke. Uhrzeit, eigene Dauer, Wiederholung und Unteraufgaben unter „Uhrzeit & mehr“; alle 8 Arten unter „Mehr Typen“. „Später (ohne Uhrzeit)“ legt die Aufgabe in die Später-Liste. |
 | Bearbeiten | Block antippen |
-| Verschieben | Maus: ziehen. Touch: Symbol (Bubble) sofort ziehen oder Karte lange drücken. Wischen scrollt. Der Block folgt dem Finger stufenlos, ein gestrichelter Umriss zeigt, wo er einrastet (5 oder 15 Min). |
+| Verschieben | Griff am Blockrand ziehen. Auf dem Touchscreen auch die Karte lange drücken. Wischen scrollt. Der Block folgt dem Finger stufenlos. Ein gestrichelter Umriss zeigt, wo er einrastet (5 oder 15 Min). |
 | Dauer ändern | Griff an der Unterkante ziehen |
-| Abhaken | Kreis rechts im Block oder „Erledigt“ in Jetzt |
+| Abhaken | Symbol links in der Liste oder in der Zeitleiste. In der Liste zieht der Griff rechts die Reihenfolge. |
 | Aufgabe aus Später einplanen | „Einplanen“ → Uhrzeit im Plan antippen (auf 15 Min gerundet) oder „Nächste Lücke“ |
 | Tagesabschluss | Nach dem letzten Block erscheint in Heute und Jetzt: „x von y geschafft – Rest auf morgen?“ → *Auf morgen* (gleiche Uhrzeit, wenn frei), *Nach „Später“* oder *So lassen*. Jederzeit auch über Mehr → „Tag abschließen“. |
 | Kalender | Mehr → „In Kalender übernehmen“: .ics für heute oder die nächsten 7 Tage, jeder Termin mit Erinnerung 10 Min vorher (VALARM). Datei öffnen → in die Kalender-App übernehmen. |

@@ -119,6 +119,106 @@
     return out.slice(0, 4);
   }
 
+  function swipeDone(dx, dy) {
+    return dx >= 48 && dx > Math.abs(dy) * 1.5;
+  }
+
+  function halfOf(block, lunchStart, lunchEnd) {
+    if (!block) return 'am';
+    if (block.lunch) return 'lunch';
+    if (block.fixed === false && (block.half === 'am' || block.half === 'pm')) return block.half;
+    return block.start < lunchStart ? 'am' : 'pm';
+  }
+
+  function placeFlex(blocks, opts) {
+    const lunchStart = opts.lunchStart;
+    const lunchEnd = opts.lunchEnd;
+    const dayStart = Math.min(opts.dayStart, lunchStart);
+    const dayEnd = Math.max(opts.dayEnd, lunchEnd);
+    const list = (blocks || []).filter((b) => b && b.id != null).map((b) => ({
+      id: b.id,
+      start: b.start,
+      dur: Math.max(5, b.dur || 30),
+      fixed: !!(b.lunch || b.fixed !== false),
+      half: b.half === 'am' || b.half === 'pm' ? b.half : null,
+      rank: Number.isFinite(Number(b.rank)) ? Number(b.rank) : b.start,
+      lunch: !!b.lunch
+    }));
+    function gaps(from, to, occupied) {
+      const occ = occupied.map((b) => ({
+        s: Math.max(b.start, from),
+        e: Math.min(b.start + b.dur, to)
+      })).filter((b) => b.e > b.s).sort((a, c) => a.s - c.s);
+      const out = [];
+      let cursor = from;
+      occ.forEach((b) => {
+        if (b.s > cursor) out.push([cursor, b.s]);
+        cursor = Math.max(cursor, b.e);
+      });
+      if (cursor < to) out.push([cursor, to]);
+      return out;
+    }
+    function pack(items, from, to, occupied) {
+      const slots = gaps(from, to, occupied);
+      const placed = [];
+      items.forEach((item) => {
+        let fit = null;
+        for (let i = 0; i < slots.length; i++) {
+          const room = slots[i][1] - slots[i][0];
+          if (room >= item.dur) { fit = slots[i][0]; slots[i][0] += item.dur; break; }
+        }
+        if (fit == null) {
+          const tail = slots.length ? slots[slots.length - 1][1] : to;
+          fit = Math.min(Math.max(tail, from), Math.max(from, DAY - item.dur));
+        }
+        placed.push({ id: item.id, start: fit, dur: item.dur });
+      });
+      return placed;
+    }
+    const fixed = list.filter((b) => b.fixed && !b.lunch);
+    const byRank = (a, b) => a.rank - b.rank || a.start - b.start;
+    const am = list.filter((b) => !b.fixed && !b.lunch && halfOf(b, lunchStart, lunchEnd) === 'am').sort(byRank);
+    const pm = list.filter((b) => !b.fixed && !b.lunch && halfOf(b, lunchStart, lunchEnd) === 'pm').sort(byRank);
+    return pack(am, dayStart, lunchStart, fixed).concat(pack(pm, lunchEnd, Math.min(DAY, Math.max(dayEnd, lunchEnd)), fixed));
+  }
+
+  function overlapSlices(blocks) {
+    const list = (blocks || []).filter((b) => b && b.id != null && Number.isFinite(b.start) && Number.isFinite(b.dur));
+    return list.map((a) => {
+      const slices = [];
+      list.forEach((b) => {
+        if (b.id === a.id) return;
+        const start = Math.max(a.start, b.start);
+        const end = Math.min(a.start + a.dur, b.start + b.dur);
+        if (end > start) slices.push({ start, end });
+      });
+      slices.sort((x, y) => x.start - y.start);
+      const merged = [];
+      slices.forEach((s) => {
+        const last = merged[merged.length - 1];
+        if (last && s.start <= last.end) last.end = Math.max(last.end, s.end);
+        else merged.push({ start: s.start, end: s.end });
+      });
+      return { id: a.id, slices: merged };
+    }).filter((x) => x.slices.length);
+  }
+
+  function pushFollowing(blocks, id) {
+    const list = (blocks || []).filter((b) => b && b.id != null).map((b) => ({ id: b.id, start: b.start, dur: b.dur }));
+    list.sort((a, b) => a.start - b.start || String(a.id).localeCompare(String(b.id)));
+    const anchor = list.find((b) => b.id === id);
+    if (!anchor) return list;
+    let cursor = anchor.start + anchor.dur;
+    list.forEach((b) => {
+      if (b.id === id || b.start < anchor.start) return;
+      if (b.start < cursor) {
+        b.start = Math.min(Math.max(cursor, 0), Math.max(0, DAY - b.dur));
+        cursor = b.start + b.dur;
+      } else cursor = Math.max(cursor, b.start + b.dur);
+    });
+    return list;
+  }
+
   function pullTime(title, dur) {
     const m = /^(\d{1,2})[:.](\d{2})\s+(.+)$/.exec(String(title || '').trim());
     if (!m) return null;
@@ -129,5 +229,5 @@
     return { title: m[3].slice(0, 80), start: fit.start, dur: fit.dur };
   }
 
-  return { isSafeId, takeId, weekday, isWeekend, fitTime, ruleHits, icsUid, saveMessage, pullTime, isPristineTemplate, pickSuggestions, DAY };
+  return { isSafeId, takeId, weekday, isWeekend, fitTime, ruleHits, icsUid, saveMessage, pullTime, isPristineTemplate, pickSuggestions, swipeDone, overlapSlices, pushFollowing, halfOf, placeFlex, DAY };
 });

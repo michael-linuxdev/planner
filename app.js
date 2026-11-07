@@ -14,6 +14,7 @@
   const OLD_KEY = 'tagesplaner.v1';
   const KEEP_PAST_DAYS = 90;
   const BUBBLE = 56;             // Breite der Symbolspalte (Bubble + Abstand)
+  const GRIP = 44;               // Ziehgriff am Daumen, mindestens 44 px
 
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
@@ -240,8 +241,8 @@
   // ==================================================================
   function defaults() {
     return {
-      version: 2, role: null, palette: 'auto', theme: 'auto', contrast: false, snap: 5,
-      dayStart: 8 * 60, dayEnd: 18 * 60, newDay: 'role', custom: null,
+      version: 2, role: null, palette: 'auto', theme: 'auto', contrast: false, leftHand: false, snap: 5,
+      dayStart: 8 * 60, dayEnd: 18 * 60, lunchStart: 12 * 60, lunchDur: 60, newDay: 'role', custom: null,
       recurring: [], inbox: [], days: {},
       reminders: { sound: false, vibrate: false, notify: false },
       tipsSeen: false
@@ -264,6 +265,11 @@
       subtasks: Array.isArray(b.subtasks) ? b.subtasks.filter((s) => s && s.text).map((s) => ({ id: nextId(s.id), text: String(s.text).slice(0, 80), done: !!s.done })) : [],
       done: !!b.done
     };
+    if (b.fixed === false) o.fixed = false;
+    else if (b.fixed === true) o.fixed = true;
+    if (b.half === 'am' || b.half === 'pm') o.half = b.half;
+    if (Number.isFinite(Number(b.rank))) o.rank = Number(b.rank);
+    if (b.lunch === true) o.lunch = true;
     if (!o.title) o.title = TYPES[o.type].label;
     if (b.recurId != null && b.recurId !== '') {
       const raw = String(b.recurId);
@@ -288,6 +294,9 @@
     if (!['auto', 'cool', 'warm'].includes(st.palette)) st.palette = 'auto';
     if (!['auto', 'light', 'dark'].includes(st.theme)) st.theme = 'auto';
     if (!['role', 'custom', 'empty'].includes(st.newDay)) st.newDay = 'role';
+    st.leftHand = st.leftHand === true;
+    st.lunchStart = [10, 11, 12, 13, 14].map((h) => h * 60).includes(st.lunchStart) ? st.lunchStart : 12 * 60;
+    st.lunchDur = [30, 45, 60, 90].includes(st.lunchDur) ? st.lunchDur : 60;
     st.dayStart = hourBound(st.dayStart, defaults().dayStart, 0, 22 * 60);
     st.dayEnd = hourBound(st.dayEnd, Math.max(defaults().dayEnd, st.dayStart + 120), st.dayStart + 120, 24 * 60);
     st.reminders = Object.assign(defaults().reminders, st.reminders || {});
@@ -445,6 +454,7 @@
     root.dataset.theme = theme;
     root.dataset.palette = activePalette();
     if (state.contrast) root.dataset.contrast = 'high'; else delete root.dataset.contrast;
+    root.dataset.hand = state.leftHand ? 'left' : 'right';
     // Statusleiste = echte Hintergrundfarbe (vorher leicht abweichend im Dunkelmodus)
     $('#meta-theme').setAttribute('content', theme === 'dark' ? (state.contrast ? '#000000' : '#121418') : (state.contrast ? '#ffffff' : '#f5f4f0'));
   }
@@ -463,7 +473,12 @@
     render();
     const msg = TL.saveMessage(saved, !persistOk, label);
     if (!saved) { if (msg) toast(msg); return result; }
-    if (label) toast(label, opts.noUndo ? null : { label: 'Rückgängig', fn: undo });
+    if (label) {
+      const actions = [];
+      if (!opts.noUndo) actions.push({ label: 'Rückgängig', fn: undo });
+      if (opts.also) actions.push(opts.also);
+      toast(label, actions.length ? actions : null);
+    }
     return result;
   }
   function undo() {
@@ -503,11 +518,12 @@
   function toast(msg, action) {
     const host = toastHost();
     if (el.toast.parentNode !== host) host.appendChild(el.toast);
-    el.toast.innerHTML = '<span>' + esc(msg) + '</span>' + (action ? '<button type="button" class="btn small">' + esc(action.label) + '</button>' : '');
-    if (action) el.toast.querySelector('button').addEventListener('click', () => { hideToast(); action.fn(); });
+    const actions = !action ? [] : Array.isArray(action) ? action : [action];
+    el.toast.innerHTML = '<span>' + esc(msg) + '</span>' + actions.map((a) => '<button type="button" class="btn small">' + esc(a.label) + '</button>').join('');
+    el.toast.querySelectorAll('button').forEach((btn, i) => btn.addEventListener('click', () => { hideToast(); actions[i].fn(); }));
     el.toast.classList.add('show');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(hideToast, action ? 6000 : 2600);
+    toastTimer = setTimeout(hideToast, actions.length ? 6000 : 2600);
   }
   function hideToast() { el.toast.classList.remove('show'); }
 
@@ -615,6 +631,48 @@
     head.addEventListener('pointercancel', endSwipe);
   });
 
+  function lunchOf(blocks) {
+    const marked = blocks.find((b) => b.lunch);
+    if (marked) return { start: marked.start, end: marked.start + marked.dur };
+    const named = blocks.find((b) => b.type === 'pause' && /mittag/i.test(b.title || ''));
+    if (named) return { start: named.start, end: named.start + named.dur, adopt: named };
+    return { start: state.lunchStart, end: state.lunchStart + state.lunchDur, create: true };
+  }
+  function layoutFocusDay(k) {
+    if (!k || k < todayKey()) return;
+    const had = !!state.days[k];
+    const day = getDay(k);
+    const blocks = day.blocks;
+    let changed = false;
+    let window = lunchOf(blocks);
+    if (window.adopt) { window.adopt.lunch = true; window.adopt.fixed = true; changed = true; }
+    if (window.create) {
+      blocks.push(normBlock({ title: 'Mittagspause', type: 'pause', icon: 'food', start: window.start, dur: state.lunchDur, lunch: true, fixed: true }));
+      changed = true;
+    }
+    const placed = TL.placeFlex(blocks, {
+      dayStart: state.dayStart, dayEnd: state.dayEnd, lunchStart: window.start, lunchEnd: window.end
+    });
+    placed.forEach((p) => {
+      const b = blocks.find((x) => x.id === p.id);
+      if (b && b.start !== p.start) { b.start = p.start; changed = true; }
+    });
+    if (changed && had) save();
+  }
+  function syncLunchToday() {
+    const k = todayKey();
+    const day = state.days[k] || drafts[k];
+    if (!day) return;
+    const b = day.blocks.find((x) => x.lunch) || day.blocks.find((x) => x.type === 'pause' && /mittag/i.test(x.title || ''));
+    if (!b) return;
+    if (!state.days[k]) materialize(k);
+    b.lunch = true;
+    b.fixed = true;
+    b.start = state.lunchStart;
+    b.dur = state.lunchDur;
+    if (!/mittag/i.test(b.title || '')) b.title = 'Mittagspause';
+  }
+
   // ==================================================================
   // Rendern
   // ==================================================================
@@ -625,6 +683,7 @@
     el.app.hidden = false;
     document.body.dataset.tab = tab;
     $$('.tab[data-tab]').forEach((t) => t.setAttribute('aria-current', String(t.dataset.tab === tab)));
+    if (!drag) layoutFocusDay(viewKey);
     renderHeader();
     renderPlanTop();
     renderTimeline();
@@ -734,7 +793,6 @@
   function goDay(k, scroll) {
     viewKey = k;
     openIds.clear();
-    if (tab === 'focus') tab = 'plan';
     render();
     if (scroll !== false) { if (isToday()) scrollToNow(); else window.scrollTo(0, 0); }
   }
@@ -822,7 +880,7 @@
     let html = '';
 
     if (!state.tipsSeen && blocks.length) {
-      html += '<section class="card-note tips"><p>' + icon('grip') + '<span><b>Tipp:</b> Symbol ziehen verschiebt, die Unterkante ändert die Dauer, der Kreis hakt ab.</span></p>' +
+      html += '<section class="card-note tips"><p>' + icon('grip') + '<span><b>Tipp:</b> Zum Verschieben: Griff ziehen. Zum Ändern der Dauer: Unterkante ziehen. Zum Abhaken: Symbol tippen.</span></p>' +
         '<button type="button" class="icon-btn" data-act="tips-ok" aria-label="Tipp ausblenden">' + icon('close') + '</button></section>';
     }
 
@@ -950,60 +1008,46 @@
   function yA(t) { let y = (t - G.start) * PPM; for (const x of G.extras) if (x.at <= t) y += x.h; return y; }
   function yB(t) { let y = (t - G.start) * PPM; for (const x of G.extras) if (x.at < t) y += x.h; return y; }
 
-  function layoutLanes(list) {
-    const sorted = list.slice().sort((a, b) => a.start - b.start || b.dur - a.dur);
-    const out = new Map();
-    let cluster = [], lanesEnd = [], clusterEnd = -Infinity;
-    const flush = () => { cluster.forEach(({ b, lane }) => out.set(b.id, { lane, lanes: lanesEnd.length })); cluster = []; lanesEnd = []; };
-    for (const b of sorted) {
-      if (cluster.length && b.start >= clusterEnd) flush();
-      let lane = lanesEnd.findIndex((end) => end <= b.start);
-      if (lane === -1) { lane = lanesEnd.length; lanesEnd.push(0); }
-      lanesEnd[lane] = b.start + b.dur;
-      cluster.push({ b, lane });
-      clusterEnd = Math.max(cluster.length === 1 ? -Infinity : clusterEnd, b.start + b.dur);
-    }
-    flush();
-    return out;
-  }
-  function laneBox(pos) {
-    const n = pos.lanes, i = pos.lane, gap = n > 1 ? 4 : 0;
-    if (i === 0) return { left: '0px', width: 'calc(' + BUBBLE + 'px + (100% - ' + BUBBLE + 'px) / ' + n + ' - ' + gap + 'px)', cardLeft: BUBBLE + 'px' };
-    const left = 'calc(' + BUBBLE + 'px + ' + i + ' * (100% - ' + BUBBLE + 'px) / ' + n + ')';
-    return { left, width: 'calc((100% - ' + BUBBLE + 'px) / ' + n + ' - ' + gap + 'px)', cardLeft: left };
-  }
-
-  function itemHtml(b, pos) {
+  function itemHtml(b, slices, stack) {
     const t = TYPES[b.type];
     const top = yA(b.start);
     const h = Math.max(yB(b.start + b.dur) - top, 15);
     const compact = h < 60, tiny = h < 42, micro = h < 24, roomy = h >= 90;
     const ic = b.icon || b.type;
-    const box = laneBox(pos);
     const open = openIds.has(b.id) && b.subtasks.length > 0;
     const doneSubs = b.subtasks.filter((s) => s.done).length;
     const sub = b.subtasks.length
       ? '<button type="button" class="sub-toggle no-drag" aria-expanded="' + open + '" aria-label="Unteraufgaben ' + (open ? 'zuklappen' : 'aufklappen') + ', ' + doneSubs + ' von ' + b.subtasks.length + ' erledigt">' + icon('chevron') + '<span>' + doneSubs + '/' + b.subtasks.length + '</span></button>'
       : '';
-    const label = t.label + ': ' + b.title + ', ' + fmt(b.start) + ' bis ' + fmt(b.start + b.dur) + (b.done ? ', erledigt' : '');
+    const parts = slices || [];
+    const hatch = parts.map((s) => {
+      const topPct = ((s.start - b.start) / b.dur) * 100;
+      const hPct = ((s.end - s.start) / b.dur) * 100;
+      return '<span class="overlap" style="top:' + topPct.toFixed(2) + '%;height:' + hPct.toFixed(2) + '%"></span>';
+    }).join('');
+    const label = t.label + ': ' + b.title + ', ' + fmt(b.start) + ' bis ' + fmt(b.start + b.dur) + (b.done ? ', erledigt' : '') + (parts.length ? ', Überschneidung' : '');
+    const doneLabel = (b.done ? 'Wieder öffnen' : 'Abhaken') + ': ' + esc(b.title);
+    const lead = state.leftHand ? GRIP : BUBBLE;
+    const tail = state.leftHand ? BUBBLE : GRIP;
     let html = '<div class="item t-' + b.type + (compact ? ' compact' : '') + (tiny ? ' tiny' : '') + (micro ? ' micro' : '') + (roomy ? ' roomy' : '') + (b.done ? ' done' : '') +
-      (pos.lane > 0 ? ' nobubble' : '') + (pos.lanes > 1 ? ' laned' : '') + (open ? ' open' : '') + '" data-id="' + b.id + '"' +
-      ' style="top:' + top + 'px;height:' + h + 'px;left:' + box.left + ';width:' + box.width + '">' +
-      (pos.lane === 0 ? '<div class="bubble" data-grip title="Ziehen zum Verschieben"><span class="bubble-fill"></span>' + icon(b.done ? 'check' : ic) + '</div>' : '') +
-      '<div class="card" tabindex="0" title="' + esc(b.title + ' · ' + fmt(b.start) + '–' + fmt(b.start + b.dur)) + '" aria-roledescription="Zeitblock" aria-label="' + esc(label) + '. Enter bearbeiten, Leertaste abhaken, Pfeiltasten verschieben, Umschalt+Pfeile Dauer.">' +
-        (pos.lane > 0 ? '<span class="card-icon">' + icon(ic) + '</span>' : '') +
+      (parts.length ? ' has-overlap' : '') + (open ? ' open' : '') + '" data-id="' + b.id + '"' +
+      ' style="top:' + top + 'px;height:' + h + 'px;left:0;width:100%;--stack:' + (stack || 1) + '">' +
+      '<button type="button" class="bubble no-drag" data-done aria-pressed="' + b.done + '" aria-label="' + doneLabel + '"><span class="bubble-fill"></span>' + icon(b.done ? 'check' : ic) + '</button>' +
+      '<div class="card" tabindex="0" title="' + esc(b.title + ' · ' + fmt(b.start) + '–' + fmt(b.start + b.dur)) + '" aria-roledescription="Zeitblock" aria-label="' + esc(label) + '. Enter bearbeitet. Leertaste hakt ab. Pfeiltasten verschieben. Umschalt und Pfeile ändern die Dauer.">' +
+        hatch +
         '<span class="card-meta"><span class="card-time">' + fmt(b.start) + '–' + fmt(b.start + b.dur) + '</span><span class="card-dur"> · ' + durText(b.dur) + '</span><span class="card-live"></span>' +
+          (parts.length ? '<span class="overlap-hint">Überschneidung</span>' : '') +
           (b.recurId ? '<span class="rep" title="Wiederholt sich">' + icon('repeat') + '</span>' : '') + '</span>' +
         '<span class="card-text"><span class="card-title">' + esc(b.title) + '</span></span>' +
         '<span class="badge"></span>' + sub +
-        '<button type="button" class="check no-drag" aria-pressed="' + b.done + '" aria-label="' + (b.done ? 'Wieder öffnen' : 'Abhaken') + ': ' + esc(b.title) + '">' + icon('check') + '</button>' +
       '</div>' +
+      '<div class="grip" data-grip aria-hidden="true">' + icon('grip') + '</div>' +
       '<div class="resize" title="Ziehen, um die Dauer zu ändern" aria-hidden="true"><span></span></div>' +
     '</div>';
     if (open) {
       let extraBefore = 0;
       for (const x of G.extras) { if (x.id === b.id) break; if (x.at === b.start + b.dur) extraBefore += x.h; }
-      html += '<div class="subpanel t-' + b.type + '" data-for="' + b.id + '" style="top:' + (yB(b.start + b.dur) + extraBefore) + 'px;height:' + (subPanelHeight(b) - 6) + 'px;left:' + box.cardLeft + ';width:calc(' + box.width + ' - ' + (pos.lane === 0 ? BUBBLE : 0) + 'px)">' +
+      html += '<div class="subpanel t-' + b.type + '" data-for="' + b.id + '" style="top:' + (yB(b.start + b.dur) + extraBefore) + 'px;height:' + (subPanelHeight(b) - 6) + 'px;left:' + lead + 'px;width:calc(100% - ' + (lead + tail) + 'px)">' +
         '<ul>' + b.subtasks.map((s) => '<li><label class="check-row"><input type="checkbox" data-sub="' + s.id + '"' + (s.done ? ' checked' : '') + '><span>' + esc(s.text) + '</span></label></li>').join('') + '</ul>' +
         '<form class="sub-add"><input type="text" name="text" maxlength="80" placeholder="Unteraufgabe hinzufügen …" aria-label="Neue Unteraufgabe" enterkeyhint="done" autocomplete="off">' +
         '<button type="submit" class="icon-btn" aria-label="Hinzufügen">' + icon('plus') + '</button></form></div>';
@@ -1022,9 +1066,9 @@
       if (m + 30 < G.end) g += '<div class="gridline half" style="top:' + yA(m + 30) + 'px"></div>';
     }
     el.grid.innerHTML = g;
-    const lanes = layoutLanes(blocks);
-    el.items.innerHTML = blocks.slice().sort((a, b) => a.start - b.start).map((b) => {
-      try { return itemHtml(b, lanes.get(b.id) || { lane: 0, lanes: 1 }); }
+    const overlap = new Map(TL.overlapSlices(blocks).map((x) => [x.id, x.slices]));
+    el.items.innerHTML = blocks.slice().sort((a, b) => a.start - b.start).map((b, i) => {
+      try { return itemHtml(b, overlap.get(b.id) || [], i + 1); }
       catch (e) { return ''; }
     }).join('');
   }
@@ -1132,109 +1176,162 @@
     if (m < 22 * 60) return 'Guten Abend';
     return 'Gute Nacht';
   }
+  function focusHalfRows(blocks, half, lunch) {
+    return blocks.filter((b) => !b.lunch && TL.halfOf(b, lunch.start, lunch.end) === half)
+      .sort((a, b) => a.start - b.start || (a.rank || 0) - (b.rank || 0));
+  }
   function renderFocus() {
-    if (tab !== 'focus' || el.app.hidden) return;
-    const info = nowInfo();
-    const { n, cur, next, list } = info;
-    el.focusClock.textContent = fmt(n);
-    el.focusClock.setAttribute('datetime', fmt(n));
-    el.focusDate.textContent = greeting(n) + ' · ' + dateLong.format(now());
-    const active = cur && !cur.done ? cur : null;
-    const wrap = !next && !active && wrapDue();
-    const prog = dayProgress(info.k);
-    const sig = JSON.stringify([list.length, active && [active.id, active.title, active.type, active.icon, active.dur, active.start, active.subtasks], cur && cur.done && cur.id, next && [next.id, next.title, next.start], info.prevEnd != null, wrap, prog]);
-    let enter = false;
-    if (sig !== focusSig) {
-      focusSig = sig;
-      // Einblenden nur, wenn sich wirklich etwas Neues zeigt (nicht beim Abhaken einer Unteraufgabe)
-      const key = JSON.stringify(list.length ? [active && active.id, cur && cur.done && cur.id, next && next.id, wrap] : 'leer');
-      enter = key !== focusKey;
-      focusKey = key;
-      let html = '';
-      if (!list.length) {
-        html = '<div class="focus-empty"><div class="celebrate calm">' + icon('sun') + '</div><h2>Heute ist noch nichts geplant.</h2><p>Das ist völlig in Ordnung. Wenn du magst, leg einen ersten Block an oder starte mit einer Vorlage.</p>' +
-          '<div class="row-btns"><button type="button" class="btn primary" data-fact="add">' + icon('plus') + '<span>Block anlegen</span></button>' +
-          '<button type="button" class="btn" data-fact="replan">' + icon('refresh') + '<span>Vorlage laden</span></button></div></div>';
-      } else if (active) {
-        const subs = active.subtasks;
-        html = '<div class="focus-hero t-' + active.type + '">' +
-          '<div class="ring-wrap">' + ringSvg(enter ? 0 : 1, enter ? 'big intro' : 'big') + '<div class="ring-center"><span class="ring-ic">' + icon(active.icon || active.type) + '</span>' +
-            '<span class="ring-time" data-cd role="timer"></span><span class="ring-sub">verbleibend</span></div></div>' +
-          '<span class="focus-type">' + esc(typeLabel(active.type)) + '</span>' +
-          '<h2 class="focus-title">' + esc(active.title) + '</h2>' +
-          '<p class="focus-range">' + fmt(active.start) + '–' + fmt(active.start + active.dur) + ' · ' + durText(active.dur) + '</p>' +
-          '<div class="focus-actions"><button type="button" class="btn primary big" data-fact="done">' + icon('check') + '<span>Erledigt</span></button>' +
-          '<button type="button" class="btn big" data-fact="plus5">' + icon('plus') + '<span>5 Min</span></button>' +
-          '<button type="button" class="btn big icon-only" data-fact="edit" aria-label="Bearbeiten">' + icon('pen') + '</button></div>' +
-          (subs.length ? '<ul class="focus-subs">' + subs.map((s) => '<li><label class="check-row big"><input type="checkbox" data-fsub="' + s.id + '"' + (s.done ? ' checked' : '') + '><span>' + esc(s.text) + '</span></label></li>').join('') + '</ul>' : '') +
-          '</div>';
-      } else {
-        const doneCur = cur && cur.done ? cur : null;
-        const before = next && info.prevEnd == null && !doneCur; // vor dem ersten Block
-        let title, text;
-        if (doneCur) { title = 'Geschafft: ' + esc(doneCur.title); text = next ? 'Durchatmen. Du musst gerade nichts.' : 'Für heute ist nichts mehr geplant.'; }
-        else if (before) { title = 'Gleich geht’s los'; text = 'Dein Tag startet um ' + fmt(next.start) + '. Bis dahin musst du nichts.'; }
-        else if (next) { title = 'Freie Zeit'; text = 'Durchatmen. Du musst gerade nichts.'; }
-        else { title = 'Feierabend'; text = prog && !wrap ? prog.done + ' von ' + prog.total + ' geschafft. Für heute ist nichts mehr geplant.' : 'Für heute ist nichts mehr geplant.'; }
-        html = '<div class="focus-hero free">' +
-          (next ? '<div class="ring-wrap">' + ringSvg(enter ? 0 : 1, enter ? 'big intro' : 'big') + '<div class="ring-center"><span class="ring-ic">' + icon(before ? 'sun' : 'pause') + '</span><span class="ring-time" data-cd role="timer"></span><span class="ring-sub">bis zum nächsten Block</span></div></div>'
-            : '<div class="celebrate">' + icon('moon') + '</div>') +
-          '<h2 class="focus-title">' + title + '</h2><p class="focus-range">' + text + '</p></div>';
-        if (wrap) html += wrapCardHtml('focus-wrap', 'data-fact');
-      }
-      if (next) {
-        html += '<div class="focus-next t-' + next.type + '" data-next><span class="mini-bubble">' + icon(next.icon || next.type) + '</span>' +
-          '<span class="fn-text"><span class="kicker" data-next-in></span><b>' + esc(next.title) + '</b><span>' + fmt(next.start) + '–' + fmt(next.start + next.dur) + '</span></span></div>';
-      }
-      el.focusBody.innerHTML = html;
-      el.focusBody.classList.toggle('enter', enter);
+    if (tab !== 'focus' || el.app.hidden || !el.focusDate) return;
+    const k = viewKey;
+    const day = getDay(k);
+    const lunch = lunchOf(day.blocks);
+    const n = nowMin();
+    const current = k === todayKey() ? (n < lunch.start ? 'am' : (n < lunch.end ? 'lunch' : 'pm')) : null;
+    el.focusDate.textContent = relName(k) + (k === todayKey() ? '' : ' · ' + dateShort.format(keyToDate(k)));
+    const am = focusHalfRows(day.blocks, 'am', lunch);
+    const pm = focusHalfRows(day.blocks, 'pm', lunch);
+    const nowId = current === 'am' || current === 'pm'
+      ? ((current === 'am' ? am : pm).find((b) => !b.done) || {}).id
+      : null;
+    const sig = JSON.stringify([k, lunch.start, lunch.end, nowId, am.map(rowSig), pm.map(rowSig), wrapDue() && k === todayKey()]);
+    if (sig === focusSig) return;
+    focusSig = sig;
+    const catalog = state.role ? fromTemplate(state.role).map((b) => ({ title: b.title, type: b.type, dur: b.dur, start: b.start, icon: b.icon })) : [];
+    let html = '';
+    if (k === todayKey() && wrapDue()) {
+      html += '<section class="fl-wrap"><p>Noch offen heute.</p><button type="button" class="btn small primary" data-fl="tomorrow">Auf morgen</button></section>';
     }
-    // sekündliche Aktualisierung
-    const cd = el.focusBody.querySelector('[data-cd]');
-    const ringVal = el.focusBody.querySelector('.ring.big .ring-val');
-    if (enter && ringVal) {
-      getComputedStyle(ringVal).strokeDashoffset; // Startwert festhalten, damit der Ring sich sanft füllt
-      setTimeout(() => { const r = el.focusBody.querySelector('.ring.intro'); r && r.classList.remove('intro'); }, 1200);
-    }
-    if (active && cd) {
-      const leftSec = (active.start + active.dur - n) * 60;
-      cd.textContent = clockText(leftSec);
-      ringVal.style.strokeDashoffset = (100 - clamp(leftSec / (active.dur * 60), 0, 1) * 100).toFixed(2);
-    } else if (cd && next) {
-      const base = info.prevEnd != null ? info.prevEnd : Math.min(next.start - 60, n);
-      const leftSec = (next.start - n) * 60;
-      cd.textContent = clockText(leftSec);
-      ringVal.style.strokeDashoffset = (100 - clamp(leftSec / Math.max(60, (next.start - base) * 60), 0, 1) * 100).toFixed(2);
-    }
-    const ni = el.focusBody.querySelector('[data-next-in]');
-    if (ni && next) {
-      const until = Math.ceil(next.start - n);
-      ni.textContent = until <= TRANSITION_MIN ? 'In ' + until + ' Min · langsam abschließen' : 'Als Nächstes · in ' + durText(until);
-      el.focusBody.querySelector('[data-next]').classList.toggle('soon', until <= TRANSITION_MIN);
-    }
+    html += halfHtml('am', 'Vormittag', am, nowId, catalog, 9 * 60) +
+      '<section class="fl-lunch"><b>Mittagspause</b><span>' + fmt(lunch.start) + '–' + fmt(lunch.end) + '</span></section>' +
+      halfHtml('pm', 'Nachmittag', pm, nowId, catalog, 14 * 60);
+    el.focusBody.innerHTML = html;
+  }
+  function rowSig(b) { return [b.id, b.title, b.done, b.start, b.dur, b.fixed === false, b.half, b.rank, b.type]; }
+  function halfHtml(half, title, rows, nowId, catalog, hintMin) {
+    const sug = TL.pickSuggestions(catalog, getDay(viewKey).blocks, hintMin).slice(0, 3);
+    const chips = sug.map((s) => '<button type="button" class="fl-chip t-' + s.type + '" data-fl="sug" data-half="' + half + '" data-title="' + esc(s.title) + '" data-type="' + s.type + '" data-dur="' + s.dur + '" data-icon="' + esc(s.icon || '') + '">' + esc(s.title) + '</button>').join('');
+    const list = rows.map((b) => {
+      const other = half === 'am' ? 'Nachmittag' : 'Vormittag';
+      const fixed = b.fixed !== false;
+      return '<li class="fl-row t-' + b.type + (b.done ? ' done' : '') + (b.id === nowId ? ' is-now' : '') + '" data-id="' + b.id + '" data-half="' + half + '">' +
+        '<button type="button" class="fl-done" data-fl="done" aria-label="' + (b.done ? 'Wieder öffnen' : 'Abhaken') + ': ' + esc(b.title) + '">' + icon(b.done ? 'check' : (b.icon || b.type)) + '</button>' +
+        '<button type="button" class="fl-main" data-fl="edit"><span class="fl-kicker">' + (b.id === nowId ? 'Jetzt' : '') + '</span><b>' + esc(b.title) + '</b>' +
+        '<small>' + (fixed ? fmt(b.start) + ' · fest' : durText(b.dur)) + '</small></button>' +
+        '<button type="button" class="fl-move" data-fl="half" data-to="' + (half === 'am' ? 'pm' : 'am') + '">nach ' + other + '</button>' +
+        '<div class="fl-grip" data-fl="grip" aria-hidden="true">' + icon('grip') + '</div></li>';
+    }).join('');
+    return '<section class="fl-half" data-half="' + half + '"><header><h2>' + title + '</h2></header>' +
+      (chips ? '<div class="fl-chips">' + chips + '</div>' : '') +
+      '<ul class="fl-list">' + (list || '<li class="fl-empty">Noch nichts.</li>') + '</ul>' +
+      '<form class="fl-add" data-half="' + half + '"><input type="text" name="title" maxlength="80" placeholder="Aufgabe, dann Enter" aria-label="Aufgabe für ' + title + '" enterkeyhint="done" autocomplete="off"></form></section>';
+  }
+  function focusHalfNow() {
+    const blocks = getDay(todayKey()).blocks;
+    const lunch = lunchOf(blocks);
+    return nowMin() < lunch.start ? 'am' : 'pm';
+  }
+  function addFlexTask(half, title, type, dur, iconName) {
+    const timed = TL.pullTime(title, dur || 30);
+    mutate('Aufgabe hinzugefügt.', () => {
+      const day = materialize(viewKey);
+      const lunch = lunchOf(day.blocks);
+      const rank = day.blocks.reduce((m, b) => Math.max(m, b.rank || 0), 0) + 1;
+      const block = normBlock({
+        title: timed ? timed.title : title,
+        type: type || 'quick',
+        dur: timed ? timed.dur : (dur || 30),
+        start: timed ? timed.start : (half === 'am' ? state.dayStart : lunch.end),
+        icon: iconName || null,
+        fixed: !!timed,
+        half: timed ? undefined : half,
+        rank: timed ? undefined : rank
+      });
+      if (timed) delete block.half;
+      day.blocks.push(block);
+    });
+  }
+  function moveHalf(id, half) {
+    mutate(half === 'pm' ? 'Nach Nachmittag.' : 'Nach Vormittag.', () => {
+      const day = materialize(viewKey);
+      const b = day.blocks.find((x) => x.id === id);
+      if (!b || b.lunch) return false;
+      b.half = half;
+      b.fixed = false;
+      b.rank = day.blocks.reduce((m, x) => Math.max(m, x.rank || 0), 0) + 1;
+    });
   }
 
   el.focusBody.addEventListener('click', (e) => {
-    const b = e.target.closest('[data-fact]');
-    if (!b) return;
-    const { cur, k } = nowInfo();
-    const act = b.dataset.fact;
-    if (act === 'add') { openEditor({ kind: 'block', day: k }); return; }
-    if (act === 'replan') { viewKey = k; replan(); return; }
-    if (act.startsWith('wrap-')) { wrapAction(act.slice(5)); return; }
-    if (!cur) return;
-    if (act === 'done') toggleDone(cur.id, k);
-    else if (act === 'plus5') mutate('5 Minuten verlängert.', () => { const x = materialize(k).blocks.find((y) => y.id === cur.id); x.dur = Math.min(x.dur + 5, 24 * 60 - x.start); });
-    else if (act === 'edit') { viewKey = k; openEditor({ kind: 'block', id: cur.id, day: k }); }
+    if (e.target.closest('[data-fl="tomorrow"]')) { wrapAction('tomorrow'); return; }
+    const sug = e.target.closest('[data-fl="sug"]');
+    if (sug) { addFlexTask(sug.dataset.half, sug.dataset.title, sug.dataset.type, Number(sug.dataset.dur), sug.dataset.icon || null); return; }
+    const row = e.target.closest('.fl-row');
+    if (!row) return;
+    if (e.target.closest('[data-fl="done"]')) { toggleDone(row.dataset.id, viewKey); return; }
+    if (e.target.closest('[data-fl="half"]')) { moveHalf(row.dataset.id, e.target.closest('[data-fl="half"]').dataset.to); return; }
+    if (e.target.closest('[data-fl="edit"]')) { openEditor({ kind: 'block', id: row.dataset.id, day: viewKey }); }
   });
-  el.focusBody.addEventListener('change', (e) => {
-    const cb = e.target.closest('[data-fsub]');
-    if (!cb) return;
-    const { cur, k } = nowInfo();
-    if (!cur) return;
-    mutate(null, () => { const s = materialize(k).blocks.find((y) => y.id === cur.id).subtasks.find((x) => x.id === cb.dataset.fsub); if (s) s.done = cb.checked; });
-    if (cb.checked) haptic();
+  el.focusBody.addEventListener('submit', (e) => {
+    const form = e.target.closest('.fl-add');
+    if (!form) return;
+    e.preventDefault();
+    const title = form.elements.title.value.trim();
+    if (!title) return;
+    form.elements.title.value = '';
+    addFlexTask(form.dataset.half, title);
   });
+  let flDrag = null;
+  el.focusBody.addEventListener('pointerdown', (e) => {
+    const grip = e.target.closest('[data-fl="grip"]');
+    if (!grip) return;
+    const row = grip.closest('.fl-row');
+    flDrag = { id: row.dataset.id, y0: e.clientY, pid: e.pointerId, row, on: false };
+    row.classList.add('fl-hold');
+  });
+  window.addEventListener('pointermove', (e) => {
+    if (!flDrag || e.pointerId !== flDrag.pid) return;
+    if (Math.abs(e.clientY - flDrag.y0) > 6) {
+      flDrag.on = true;
+      flDrag.row.classList.add('fl-dragging');
+      flDrag.row.style.transform = 'translateY(' + (e.clientY - flDrag.y0) + 'px)';
+    }
+  });
+  window.addEventListener('pointerup', (e) => {
+    if (!flDrag || e.pointerId !== flDrag.pid) return;
+    const d = flDrag;
+    flDrag = null;
+    d.row.classList.remove('fl-hold', 'fl-dragging');
+    d.row.style.transform = '';
+    if (!d.on) return;
+    d.row.style.pointerEvents = 'none';
+    const under = document.elementFromPoint(e.clientX, e.clientY);
+    d.row.style.pointerEvents = '';
+    const target = under && under.closest('.fl-row, .fl-half');
+    if (!target) return;
+    const half = target.dataset.half || (target.closest('.fl-half') || {}).dataset && target.closest('.fl-half').dataset.half;
+    const beforeId = target.classList && target.classList.contains('fl-row') ? target.dataset.id : null;
+    if (!half || beforeId === d.id) return;
+    const day = materialize(viewKey);
+    const moving = day.blocks.find((b) => b.id === d.id);
+    if (!moving || moving.lunch) return;
+    const lunch = lunchOf(day.blocks);
+    const flex = day.blocks.filter((b) => !b.lunch && b.fixed === false && b.id !== d.id && TL.halfOf(b, lunch.start, lunch.end) === half)
+      .sort((a, b) => (a.rank || 0) - (b.rank || 0));
+    const ids = flex.map((b) => b.id);
+    const at = beforeId && ids.indexOf(beforeId) >= 0 ? ids.indexOf(beforeId) : ids.length;
+    ids.splice(at, 0, d.id);
+    mutate('Reihenfolge geändert.', () => {
+      const live = materialize(viewKey);
+      const item = live.blocks.find((b) => b.id === d.id);
+      item.half = half;
+      item.fixed = false;
+      ids.forEach((id, i) => {
+        const b = live.blocks.find((x) => x.id === id);
+        if (b) { b.rank = i; if (b.id === d.id) { b.half = half; b.fixed = false; } }
+      });
+    });
+  });
+
 
   function setTab(t) {
     if (t !== 'plan') place = null;
@@ -1244,6 +1341,8 @@
     if (t === 'plan') { if (isToday()) scrollToNow(); else window.scrollTo(0, 0); } else window.scrollTo(0, 0);
   }
   $$('.tab[data-tab]').forEach((t) => t.addEventListener('click', () => setTab(t.dataset.tab)));
+  $('#focus-prev').addEventListener('click', () => { viewKey = addDays(viewKey, -1); focusSig = ''; render(); });
+  $('#focus-next').addEventListener('click', () => { viewKey = addDays(viewKey, 1); focusSig = ''; render(); });
 
   // ---------- Erinnerungen (lokal, opt-in) ----------
   let fired;
@@ -1384,7 +1483,11 @@
     const b = getDay(k).blocks.find((x) => x.id === id);
     if (!b) return;
     const willDone = !b.done;
-    mutate(null, () => { materialize(k).blocks.find((x) => x.id === id).done = willDone; });
+    const p = dayProgress(k);
+    const finishes = willDone && p && b.type !== 'buffer' && p.done + 1 === p.total;
+    mutate(willDone ? (finishes ? 'Alles erledigt. Richtig stark!' : 'Abgehakt.') : 'Wieder geöffnet.', () => {
+      materialize(k).blocks.find((x) => x.id === id).done = willDone;
+    });
     if (willDone) {
       haptic();
       const node = itemNode(id);
@@ -1396,9 +1499,7 @@
         node.appendChild(burst);
         setTimeout(() => { node.classList.remove('pop'); burst.remove(); }, 900);
       }
-      const p = dayProgress(k);
-      if (p && p.done === p.total) toast('Alles erledigt. Richtig stark!');
-      else announce('Abgehakt: ' + b.title);
+      announce('Abgehakt: ' + b.title);
     }
   }
   function duplicateBlock(id) {
@@ -1436,8 +1537,8 @@
   // Klicks in der Zeitleiste
   el.items.addEventListener('click', (e) => {
     if (suppressClick) return;
-    const chk = e.target.closest('.item .check');
-    if (chk) { toggleDone(chk.closest('.item').dataset.id); return; }
+    const doneBtn = e.target.closest('.item [data-done]');
+    if (doneBtn) { toggleDone(doneBtn.closest('.item').dataset.id); return; }
     const tgl = e.target.closest('.sub-toggle');
     if (tgl) {
       const id = tgl.closest('.item').dataset.id;
@@ -1494,28 +1595,30 @@
   const minDur = () => 5;
 
   // ==================================================================
-  // Ziehen: Blöcke verschieben / Dauer ändern
-  //  Maus: ziehen ab 5 px · Touch: lange drücken oder sofort am Symbol (Bubble) ziehen
+  // Ziehen: Griff verschiebt. Unterkante ändert die Dauer.
+  // Tippen auf die Karte öffnet den Block. Tippen auf den Griff tut nichts.
+  // Wischen nach rechts hakelt ab.
   // ==================================================================
   let drag = null;
   let suppressClick = false;
 
   el.items.addEventListener('pointerdown', (e) => {
     if (drag || (e.pointerType === 'mouse' && e.button !== 0)) return;
-    if (e.target.closest('.no-drag, .subpanel')) return;
+    if (e.target.closest('.no-drag, .subpanel, [data-done]')) return;
     const item = e.target.closest('.item');
     if (!item) return;
     const b = findBlock(item.dataset.id);
     if (!b) return;
     const onResize = !!e.target.closest('.resize');
     const onGrip = !!e.target.closest('[data-grip]');
-    drag = { id: b.id, node: item, mode: onResize ? 'resize' : 'move', orig: { start: b.start, dur: b.dur }, cur: { start: b.start, dur: b.dur },
+    drag = { id: b.id, node: item, mode: onResize ? 'resize' : 'move', fromGrip: onGrip, swipe: false,
+      orig: { start: b.start, dur: b.dur }, cur: { start: b.start, dur: b.dur },
       pid: e.pointerId, ptype: e.pointerType, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, s0: window.scrollY, active: false, timer: null, raf: 0 };
     if (onResize || onGrip) { e.preventDefault(); activateDrag(); }
     else if (e.pointerType === 'touch') {
       const d = drag;
       item.classList.add('pressing');
-      d.timer = setTimeout(() => { if (drag === d && !d.active) { activateDrag(); haptic(); } }, LONG_PRESS_MS);
+      d.timer = setTimeout(() => { if (drag === d && !d.active && !d.swipe) { activateDrag(); haptic(); } }, LONG_PRESS_MS);
     }
     if (e.pointerType !== 'touch') { try { item.setPointerCapture(e.pointerId); } catch (_) { /* egal */ } }
   });
@@ -1563,9 +1666,28 @@
     if (!drag || e.pointerId !== drag.pid) return;
     drag.x = e.clientX; drag.y = e.clientY;
     if (!drag.active) {
-      const dist = Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0);
-      if (drag.ptype === 'touch') { if (dist > 8) { clearTimeout(drag.timer); drag.node.classList.remove('pressing'); drag = null; } }
-      else if (dist > 5) activateDrag();
+      const dx = e.clientX - drag.x0;
+      const dy = e.clientY - drag.y0;
+      const dist = Math.hypot(dx, dy);
+      if (!drag.fromGrip && dx > 12 && dx > Math.abs(dy)) {
+        clearTimeout(drag.timer);
+        drag.swipe = TL.swipeDone(dx, dy);
+        drag.node.classList.remove('pressing');
+        const card = drag.node.querySelector('.card');
+        if (card && !reducedMotion()) card.style.transform = 'translateX(' + Math.max(0, Math.min(dx, 72)) + 'px)';
+        e.preventDefault();
+        return;
+      }
+      if (drag.ptype === 'touch') {
+        if (dist > 8) {
+          clearTimeout(drag.timer);
+          drag.node.classList.remove('pressing');
+          const card = drag.node.querySelector('.card');
+          if (card) card.style.transform = '';
+          drag = null;
+        }
+      }
+      else if (dist > 5 && Math.abs(dy) >= dx) activateDrag();
       return;
     }
     e.preventDefault();
@@ -1601,8 +1723,23 @@
     if (t) t.textContent = fmt(d.cur.start) + '–' + fmt(d.cur.start + d.cur.dur);
     const dd = d.node.querySelector('.card-dur');
     if (dd) dd.textContent = ' · ' + durText(d.cur.dur);
-    const badge = d.node.querySelector('.badge');
-    if (badge) badge.textContent = d.mode === 'resize' ? durText(d.cur.dur) : fmt(d.cur.start);
+  }
+
+  function pushFollowers(id) {
+    const blocks = getDay(viewKey).blocks;
+    const next = TL.pushFollowing(blocks, id);
+    const moved = next.some((b) => {
+      const cur = blocks.find((x) => x.id === b.id);
+      return cur && cur.start !== b.start;
+    });
+    if (!moved) return;
+    mutate('Nachfolgende verschoben.', () => {
+      const day = materialize(viewKey);
+      next.forEach((b) => {
+        const x = day.blocks.find((y) => y.id === b.id);
+        if (x) x.start = b.start;
+      });
+    });
   }
 
   function autoScroll() {
@@ -1627,7 +1764,18 @@
     cancelAnimationFrame(d.raf);
     document.body.classList.remove('is-dragging');
     d.node.classList.remove('pressing', 'dragging', 'is-moving', 'is-resizing');
+    const card = d.node.querySelector('.card');
+    if (card) card.style.transform = '';
     const moved = Math.hypot(e.clientX - d.x0, e.clientY - d.y0);
+    if (d.swipe) {
+      suppressClick = true;
+      setTimeout(() => { suppressClick = false; }, 80);
+      if (!cancelled && TL.swipeDone(e.clientX - d.x0, e.clientY - d.y0)) {
+        const b = findBlock(d.id);
+        if (b && !b.done) toggleDone(d.id);
+      }
+      return;
+    }
     if (d.active) {
       hideGhost();
       suppressClick = true;
@@ -1636,20 +1784,26 @@
       if (cancelled || moved < 8) {
         render();
         settle(d.id, from);
-        if (!cancelled && moved < 8 && d.mode === 'move') openEditor({ kind: 'block', id: d.id });
+        if (!cancelled && moved < 8 && d.mode === 'move' && !d.fromGrip) openEditor({ kind: 'block', id: d.id });
         return;
       }
       const b = findBlock(d.id);
       if (!b || (b.start === d.cur.start && b.dur === d.cur.dur)) {
         render();
         settle(d.id, from);
-        if (moved < 6 && d.mode === 'move') openEditor({ kind: 'block', id: d.id }); // Antippen der Bubble
+        if (moved < 6 && d.mode === 'move' && !d.fromGrip) openEditor({ kind: 'block', id: d.id });
         return;
       }
+      const preview = getDay(viewKey).blocks.map((b) => b.id === d.id ? { id: b.id, start: d.cur.start, dur: d.cur.dur } : { id: b.id, start: b.start, dur: b.dur });
+      const shifted = TL.pushFollowing(preview, d.id);
+      const canPush = shifted.some((b) => {
+        const cur = preview.find((x) => x.id === b.id);
+        return cur && cur.start !== b.start;
+      });
       mutate(d.mode === 'resize' ? 'Dauer: ' + durText(d.cur.dur) + '.' : 'Verschoben auf ' + fmt(d.cur.start) + '.', () => {
         const x = materialize(viewKey).blocks.find((y) => y.id === d.id);
-        x.start = d.cur.start; x.dur = d.cur.dur;
-      });
+        x.start = d.cur.start; x.dur = d.cur.dur; x.fixed = true; delete x.half;
+      }, canPush ? { also: { label: 'Nachfolgende verschieben', fn: () => pushFollowers(d.id) } } : undefined);
       settle(d.id, from);
       haptic();
       announce(fmt(d.cur.start) + ' bis ' + fmt(d.cur.start + d.cur.dur));
@@ -1735,7 +1889,7 @@
     if (o.kind === 'block' && o.id) src = getDay(k).blocks.find((x) => x.id === o.id);
     if (o.kind === 'inbox' && o.id) src = state.inbox.find((x) => x.id === o.id);
     const dur = o.dur || 30;
-    const draft = src ? clone(src) : normBlock({ type: o.kind === 'inbox' ? 'quick' : 'deep', start: o.start != null ? o.start : suggestStart(dur, k), dur });
+    const draft = src ? clone(src) : normBlock({ type: o.kind === 'inbox' ? 'quick' : 'deep', start: o.start != null ? o.start : suggestStart(dur, k), dur, fixed: o.flex ? false : undefined, half: o.flex ? (o.half || 'am') : undefined });
     if (!src) draft.title = '';
     ed = { kind: o.kind, id: src ? src.id : null, day: k, draft, isNew: !src, autoStart: !src && o.start == null };
     f.name.value = draft.title;
@@ -1936,7 +2090,10 @@
     const d = ed.draft;
     d.title = f.name.value.trim() || TYPES[d.type].label;
     d.subtasks = d.subtasks.map((s) => ({ id: s.id, text: s.text.trim(), done: !!s.done })).filter((s) => s.text);
-    if (ed.kind === 'block') d.start = readStart();
+    if (ed.kind === 'block') {
+      d.start = readStart();
+      if (!ed.autoStart) d.fixed = true;
+    }
     return normBlock(d);
   }
 
@@ -2072,7 +2229,8 @@
   $('#legend').innerHTML = TYPE_ORDER.map((t) =>
     '<li class="t-' + t + '"><span class="mini-bubble">' + icon(t) + '</span><span><b>' + esc(typeLabel(t)) + (SIMPLE[t] ? ' <small>(' + esc(TYPES[t].label) + ')</small>' : '') + '</b><small>' + esc(TYPES[t].hint) + '</small></span></li>').join('');
   const s = {
-    newDay: $('#s-newday'), contrast: $('#s-contrast'), start: $('#s-start'), end: $('#s-end'),
+    newDay: $('#s-newday'), contrast: $('#s-contrast'), hand: $('#s-hand'), start: $('#s-start'), end: $('#s-end'),
+    lunch: $('#s-lunch'), lunchDur: $('#s-lunch-dur'),
     sound: $('#s-sound'), vibrate: $('#s-vibrate'), notify: $('#s-notify')
   };
   function openMore() {
@@ -2084,6 +2242,10 @@
     $$('input[name="palette"]', el.more).forEach((r) => { r.checked = r.value === state.palette; });
     $$('input[name="snap"]', el.more).forEach((r) => { r.checked = Number(r.value) === state.snap; });
     s.contrast.checked = state.contrast;
+    s.hand.checked = state.leftHand;
+    s.lunch.innerHTML = [10, 11, 12, 13, 14].map((h) => '<option value="' + h * 60 + '">' + pad(h) + ':00</option>').join('');
+    s.lunch.value = String(state.lunchStart);
+    s.lunchDur.value = String(state.lunchDur);
     s.start.innerHTML = Array.from({ length: 23 }, (_, i) => '<option value="' + i * 60 + '">' + pad(i) + ':00</option>').join('');
     s.start.value = String(state.dayStart);
     fillEnd();
@@ -2127,9 +2289,17 @@
     else if (t.name === 'palette') { state.palette = t.value; save(); applyTheme(); }
     else if (t.name === 'snap') { state.snap = Number(t.value); save(); }
     else if (t === s.contrast) { state.contrast = t.checked; save(); applyTheme(); }
+    else if (t === s.hand) { state.leftHand = t.checked; save(); applyTheme(); render(); }
     else if (t === s.newDay) { state.newDay = t.value; clearDrafts(); save(); render(); }
     else if (t === s.start) { state.dayStart = Number(t.value); fillEnd(); state.dayEnd = Number(s.end.value); save(); render(); }
     else if (t === s.end) { state.dayEnd = Number(t.value); save(); render(); }
+    else if (t === s.lunch || t === s.lunchDur) {
+      state.lunchStart = Number(s.lunch.value);
+      state.lunchDur = Number(s.lunchDur.value);
+      syncLunchToday();
+      save();
+      render();
+    }
     else if (t === s.sound) { state.reminders.sound = t.checked; save(); if (t.checked) chime(); }
     else if (t === s.vibrate) { state.reminders.vibrate = t.checked; save(); haptic(); }
     else if (t === s.notify) {
@@ -2287,7 +2457,9 @@
   function addNew() {
     place = null;
     renderPlace();
-    openEditor({ kind: tab === 'inbox' ? 'inbox' : 'block', day: tab === 'plan' && !isPastDay() ? viewKey : todayKey() });
+    const dayKeyForNew = tab === 'plan' && !isPastDay() ? viewKey : todayKey();
+    const flex = tab === 'focus';
+    openEditor({ kind: tab === 'inbox' ? 'inbox' : 'block', day: dayKeyForNew, flex: flex, half: flex ? focusHalfNow() : undefined });
   }
   $('#fab').addEventListener('click', addNew);
 
