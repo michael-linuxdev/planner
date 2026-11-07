@@ -166,6 +166,78 @@ test('Editor zeigt die Zeit, die gespeichert wird', () => {
   assert.strictEqual(L.MIN_DUR, 5);
 });
 
+test('Schnelleingabe liest Zeit, Tag und feste Termine', () => {
+  const today = '2026-11-07';
+  const ctx = { today, selected: today };
+  const fest = L.parseQuick('14:30 Zahnarzt', ctx);
+  assert.strictEqual(fest.title, 'Zahnarzt');
+  assert.strictEqual(fest.start, 14 * 60 + 30);
+  assert.strictEqual(fest.fixed, true);
+  assert.strictEqual(fest.day, today);
+  assert.strictEqual(L.parseQuick('14.30 Zahnarzt', ctx).start, 14 * 60 + 30);
+  assert.strictEqual(L.parseQuick('9 Uhr Arzt', ctx).start, 9 * 60);
+
+  const morgen = L.parseQuick('morgen 9:00 Arzt', ctx);
+  assert.strictEqual(morgen.day, '2026-11-08');
+  assert.strictEqual(morgen.start, 9 * 60);
+  assert.strictEqual(morgen.fixed, true);
+  assert.strictEqual(morgen.title, 'Arzt');
+
+  const frei = L.parseQuick('einkaufen', ctx);
+  assert.strictEqual(frei.fixed, false);
+  assert.strictEqual(frei.start, null);
+  assert.strictEqual(frei.day, today);
+
+  const next = L.parseQuick('Montag 10:00 Team', ctx);
+  assert.strictEqual(next.day, '2026-11-09');
+  assert.strictEqual(next.start, 10 * 60);
+  assert.strictEqual(L.parseQuick('übermorgen einkaufen', ctx).day, '2026-11-09');
+  assert.strictEqual(L.parseQuick('Sonntag Spaziergang', ctx).day, '2026-11-08');
+
+  const dated = L.parseQuick('25.12. 18:00 Festessen', ctx);
+  assert.strictEqual(dated.day, '2026-12-25');
+  assert.strictEqual(dated.start, 18 * 60);
+  assert.strictEqual(dated.title, 'Festessen');
+  assert.strictEqual(L.parseQuick('7.11. 15:00 Impfung', ctx).day, '2026-11-07');
+  assert.strictEqual(L.parseQuick('45 min Zahnarzt', ctx).dur, 45);
+  assert.strictEqual(L.parseQuick('45 min Zahnarzt', ctx).fixed, false);
+  assert.strictEqual(L.parseQuick('14:30', ctx), null);
+
+  const other = L.parseQuick('Notiz', { today, selected: '2026-11-10' });
+  assert.strictEqual(other.day, '2026-11-10');
+});
+
+test('Nur freie Aufgaben rutschen, feste bleiben', () => {
+  assert.strictEqual(L.canMove({ title: 'A', type: 'focused', done: false, fixed: false }), true);
+  assert.strictEqual(L.canMove({ title: 'Zahnarzt', type: 'meeting', done: false, fixed: true }), false);
+  assert.strictEqual(L.canMove({ title: 'Alt', type: 'deep', done: false }), false);
+  assert.strictEqual(L.canMove({ title: 'Pause', type: 'pause', done: false, fixed: false }), false);
+  const { state } = L.sanitize({
+    version: 2,
+    days: { '2026-11-09': { blocks: [
+      { id: 'a', title: 'Fest', type: 'meeting', start: 600, dur: 30, fixed: true },
+      { id: 'b', title: 'Frei', type: 'focused', start: 700, dur: 30, fixed: false },
+      { id: 'c', title: 'Alt', type: 'deep', start: 800, dur: 30 }
+    ] } }
+  });
+  const blocks = state.days['2026-11-09'].blocks;
+  assert.strictEqual(blocks[0].fixed, true);
+  assert.strictEqual(blocks[1].fixed, false);
+  assert.strictEqual(blocks[2].fixed, undefined);
+});
+
+test('Woche beginnt montags, überlappende Blöcke liegen nebeneinander', () => {
+  assert.deepStrictEqual(L.weekKeys('2026-11-07'), [
+    '2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06', '2026-11-07', '2026-11-08'
+  ]);
+  const lanes = L.layoutLanes([
+    { id: 'a', start: 9 * 60, dur: 60 },
+    { id: 'b', start: 9 * 60 + 30, dur: 30 }
+  ]);
+  assert.notStrictEqual(lanes.get('a').lane, lanes.get('b').lane);
+  assert.strictEqual(lanes.get('a').lanes, 2);
+});
+
 test('Demo-Zeit', () => {
   assert.strictEqual(L.demoMinutes('?zeit=10:30'), 10 * 60 + 30);
   assert.strictEqual(L.demoMinutes('?zeit=25:00'), null);

@@ -155,6 +155,8 @@
       subtasks,
       done: !!src.done
     };
+    if (src.fixed === true) block.fixed = true;
+    else if (src.fixed === false) block.fixed = false;
     return block;
   }
 
@@ -326,8 +328,145 @@
     return freeStart(blocks, d, from, dayStart, dayEnd);
   }
 
+  function weekday(k) {
+    return keyToDate(k).getDay();
+  }
+
+  function weekKeys(k) {
+    const monday = addDays(k, -((weekday(k) + 6) % 7));
+    const out = [];
+    for (let i = 0; i < 7; i += 1) out.push(addDays(monday, i));
+    return out;
+  }
+
   function isOpenTask(b) {
     return !!(b && !b.done && b.type !== 'pause' && b.type !== 'buffer');
+  }
+
+  function canMove(b) {
+    return isOpenTask(b) && b.fixed === false;
+  }
+
+  const DAY_WORDS = {
+    heute: 'today', morgen: 'tomorrow', übermorgen: 'over', uebermorgen: 'over',
+    so: 0, sonntag: 0, mo: 1, montag: 1, di: 2, dienstag: 2, mi: 3, mittwoch: 3,
+    do: 4, donnerstag: 4, fr: 5, freitag: 5, sa: 6, samstag: 6
+  };
+
+  function cutMatch(text, re) {
+    const m = re.exec(text);
+    if (!m) return null;
+    const next = (text.slice(0, m.index) + ' ' + text.slice(m.index + m[0].length)).replace(/\s+/g, ' ').trim();
+    return { m, next };
+  }
+
+  function resolveDayWord(word, today) {
+    if (word === 'heute' || word === 'today') return today;
+    if (word === 'morgen' || word === 'tomorrow') return addDays(today, 1);
+    if (word === 'übermorgen' || word === 'uebermorgen' || word === 'over') return addDays(today, 2);
+    const wd = DAY_WORDS[word];
+    if (typeof wd !== 'number') return null;
+    return addDays(today, (wd - weekday(today) + 7) % 7);
+  }
+
+  function parseQuick(text, ctx) {
+    const today = (ctx && ctx.today) || dayKeyFromDate(new Date());
+    const selected = (ctx && ctx.selected) || today;
+    let rest = String(text || '').replace(/\s+/g, ' ').trim();
+    if (!rest) return null;
+    let day = selected;
+    let start = null;
+    let fixed = false;
+    let dur = null;
+
+    const word = cutMatch(rest, /(?:^|\s)(heute|morgen|übermorgen|uebermorgen|sonntag|montag|dienstag|mittwoch|donnerstag|freitag|samstag|mo|di|mi|do|fr|sa|so)(?=\s|$)/i);
+    if (word) {
+      const resolved = resolveDayWord(word.m[1].toLowerCase(), today);
+      if (resolved) {
+        day = resolved;
+        rest = word.next;
+      }
+    }
+
+    const date = cutMatch(rest, /(?:^|\s)(\d{1,2})\.(\d{1,2})\.(?:(\d{2,4}))?(?=\s|$)/);
+    if (date) {
+      let year = date.m[3] ? Number(date.m[3]) : keyToDate(today).getFullYear();
+      if (year < 100) year += 2000;
+      const dom = Number(date.m[1]);
+      const month = Number(date.m[2]);
+      const d = new Date(year, month - 1, dom);
+      if (month >= 1 && month <= 12 && d.getMonth() === month - 1 && d.getDate() === dom) {
+        day = dayKeyFromDate(d);
+        rest = date.next;
+      }
+    }
+
+    const clock = cutMatch(rest, /(?:^|\s)(?:um\s+)?(\d{1,2})[:.](\d{2})(?=\s|$)/i);
+    if (clock) {
+      const h = Number(clock.m[1]);
+      const min = Number(clock.m[2]);
+      if (h <= 23 && min <= 59) {
+        start = h * 60 + min;
+        fixed = true;
+        rest = clock.next;
+      }
+    } else {
+      const hour = cutMatch(rest, /(?:^|\s)(?:um\s+)?(\d{1,2})\s*uhr(?=\s|$)/i);
+      if (hour && Number(hour.m[1]) <= 23) {
+        start = Number(hour.m[1]) * 60;
+        fixed = true;
+        rest = hour.next;
+      }
+    }
+
+    const mins = cutMatch(rest, /(?:^|\s)(\d{1,3})\s*min(?:uten)?(?=\s|$)/i);
+    if (mins) {
+      dur = Number(mins.m[1]);
+      rest = mins.next;
+    } else {
+      const hours = cutMatch(rest, /(?:^|\s)(\d{1,2})(?:[.,](\d))?\s*std(?:unden)?(?=\s|$)/i);
+      if (hours) {
+        dur = Number(hours.m[1]) * 60 + (hours.m[2] ? Number(hours.m[2]) * 6 : 0);
+        rest = hours.next;
+      }
+    }
+
+    const title = rest.trim();
+    if (!title) return null;
+    return {
+      title: title.slice(0, 80),
+      day,
+      start,
+      fixed,
+      dur: dur || 30
+    };
+  }
+
+  function layoutLanes(list) {
+    const sorted = (list || []).slice().sort((a, b) => a.start - b.start || b.dur - a.dur);
+    const out = new Map();
+    let cluster = [];
+    let lanesEnd = [];
+    let clusterEnd = -Infinity;
+    const flush = () => {
+      const n = Math.max(1, lanesEnd.length);
+      cluster.forEach(({ b, lane }) => out.set(b.id, { lane, lanes: n }));
+      cluster = [];
+      lanesEnd = [];
+    };
+    sorted.forEach((b) => {
+      if (cluster.length && b.start >= clusterEnd) flush();
+      let lane = lanesEnd.findIndex((end) => end <= b.start);
+      if (lane < 0) {
+        lane = lanesEnd.length;
+        lanesEnd.push(0);
+      }
+      lanesEnd[lane] = b.start + b.dur;
+      cluster.push({ b, lane });
+      clusterEnd = Math.max(cluster.length === 1 ? -Infinity : clusterEnd, b.start + b.dur);
+    });
+    flush();
+    return out;
   }
 
   function openTasks(blocks) {
@@ -349,7 +488,8 @@
         start,
         dur: b.dur,
         subtasks: (b.subtasks || []).map((s) => ({ text: s.text, done: !!s.done })),
-        done: false
+        done: false,
+        fixed: false
       };
       placed.push(copy);
       dest.push({ id: 'new', start, dur: b.dur });
@@ -420,6 +560,8 @@
     dayKeyFromDate,
     keyToDate,
     addDays,
+    weekday,
+    weekKeys,
     normBlock,
     sanitize,
     readStorage,
@@ -429,7 +571,10 @@
     freeStart,
     suggestStart,
     isOpenTask,
+    canMove,
     openTasks,
+    parseQuick,
+    layoutLanes,
     planTomorrow,
     dayEndMin,
     shouldOfferWrap,

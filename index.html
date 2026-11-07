@@ -39,19 +39,34 @@
   <div id="app" class="app" hidden>
     <header class="top">
       <p id="greet" class="greet"></p>
-      <p id="when" class="when"></p>
+      <div class="when-row">
+        <p id="when" class="when"></p>
+        <button id="jump-today" type="button" class="quiet" hidden>Heute</button>
+      </div>
+      <div class="week-row">
+        <button id="week-prev" type="button" class="nav" aria-label="Vorherige Woche">‹</button>
+        <div id="week" class="week" aria-label="Woche"></div>
+        <button id="week-next" type="button" class="nav" aria-label="Nächste Woche">›</button>
+      </div>
     </header>
 
     <p id="banner" class="banner" hidden></p>
     <section id="hero" class="hero" aria-live="polite"></section>
     <section id="next" hidden></section>
-    <section id="rest" hidden></section>
+    <section id="dayview" class="dayview" aria-label="Tagesansicht">
+      <h2 id="day-label" class="sec-title"></h2>
+      <div id="timeline" class="timeline">
+        <div id="hours"></div>
+        <div id="tblocks"></div>
+        <div id="now-line" class="now-line" hidden></div>
+      </div>
+    </section>
     <section id="inbox-sec" hidden></section>
 
     <form id="add-form" class="composer">
       <label class="field">
         <span class="sr-only">Neue Aufgabe</span>
-        <input id="add-title" type="text" maxlength="80" placeholder="Was steht an?" enterkeyhint="done" autocomplete="off" autocapitalize="sentences">
+        <input id="add-title" type="text" maxlength="80" placeholder="14:30 Zahnarzt oder morgen …" enterkeyhint="done" autocomplete="off" autocapitalize="sentences">
       </label>
     </form>
   </div>
@@ -63,6 +78,21 @@
         <span class="sr-only">Titel</span>
         <input id="ed-title" type="text" maxlength="80" autocomplete="off">
       </label>
+      <div class="timepick">
+        <select id="ed-h" aria-label="Stunde"></select>
+        <span aria-hidden="true">:</span>
+        <select id="ed-m" aria-label="Minute"></select>
+      </div>
+      <div class="chips" role="group" aria-label="Dauer">
+        <button type="button" data-ed-dur="15">15 Min</button>
+        <button type="button" data-ed-dur="30">30 Min</button>
+        <button type="button" data-ed-dur="60">1 Std</button>
+        <button type="button" data-ed-dur="90">90 Min</button>
+      </div>
+      <div class="chips" role="group" aria-label="Zeit fest oder frei">
+        <button id="ed-fest" type="button">Fest</button>
+        <button id="ed-frei" type="button">Frei</button>
+      </div>
       <p id="ed-when" class="when-lg"></p>
       <button type="submit" class="btn">Speichern</button>
       <button id="ed-delete" type="button" class="quiet danger">Löschen</button>
