@@ -80,7 +80,7 @@ CNAME, .nojekyll, 404.html   GitHub-Pages-Einrichtung
 - Erinnerungen (Ton, Vibration, Hinweis) gibt es nur bei geöffneter App. Verlässlich wird es über die Kalender-Datei. Gleiche Blöcke behalten ihre UID, auch wenn du die Uhrzeit änderst.
 - Kein Sync zwischen Geräten – „Sicherung exportieren/importieren“ nutzen. Browser-Daten löschen = Pläne weg.
 - Änderungen an Wiederholungen wirken ab dem gewählten Tag, nicht rückwirkend.
-- Neue Tage am Wochenende starten ohne Arbeitsvorlage. Wiederholungen bleiben. „Auf morgen“ lässt einen Block nur aus, wenn seine Serie morgen wirklich wiederkehrt.
+- Neue Tage am Wochenende starten ohne Arbeitsvorlage. Ein gespeicherter Wochenendtag, der noch exakt die unberührte Rollen-Vorlage ist, wird einmal geleert. Bearbeitete oder eigene Blöcke bleiben. „Auf morgen“ lässt einen Block nur aus, wenn seine Serie morgen wirklich wiederkehrt.
 - Erinnerungen sind aus, bis du sie einschaltest, und kommen nur bei geöffneter App. Im Titel `14:30 Zahnarzt` setzt die Uhrzeit beim Anlegen.
 - Aufgaben aus „Später“ werden per Tippen eingeplant, nicht per Ziehen.
 - Sehr kurze Blöcke (unter 15 Min) zeigen nur den Titel; lange Titel werden gekürzt – der volle Titel steht im Tooltip und im Editor.

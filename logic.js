@@ -66,6 +66,28 @@
     return label || null;
   }
 
+  function fingerprint(b) {
+    return JSON.stringify({
+      t: b.title,
+      y: b.type,
+      s: b.start,
+      d: b.dur,
+      i: b.icon || null,
+      u: (b.subtasks || []).map((s) => [s.text, !!s.done]),
+      done: !!b.done
+    });
+  }
+
+  function isPristineTemplate(blocks, templateBlocks) {
+    const own = (blocks || []).filter((b) => !b.recurId);
+    const expected = templateBlocks || [];
+    if (own.length !== expected.length) return false;
+    const A = own.map(fingerprint).sort();
+    const B = expected.map(fingerprint).sort();
+    for (let i = 0; i < A.length; i += 1) if (A[i] !== B[i]) return false;
+    return (blocks || []).filter((b) => b.recurId).every((b) => !b.done && !(b.subtasks || []).some((s) => s.done));
+  }
+
   function pullTime(title, dur) {
     const m = /^(\d{1,2})[:.](\d{2})\s+(.+)$/.exec(String(title || '').trim());
     if (!m) return null;
@@ -76,5 +98,5 @@
     return { title: m[3].slice(0, 80), start: fit.start, dur: fit.dur };
   }
 
-  return { isSafeId, takeId, weekday, isWeekend, fitTime, ruleHits, icsUid, saveMessage, pullTime, DAY };
+  return { isSafeId, takeId, weekday, isWeekend, fitTime, ruleHits, icsUid, saveMessage, pullTime, isPristineTemplate, DAY };
 });

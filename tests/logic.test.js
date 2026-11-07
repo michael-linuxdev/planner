@@ -61,6 +61,26 @@ test('Titel mit Uhrzeit spart das Eintippen der Zeit', () => {
   assert.strictEqual(L.pullTime('25:00 Nein', 30), null);
 });
 
+test('Unberührte Wochenend-Vorlage ist erkennbar, bearbeitete nicht', () => {
+  const template = [
+    { title: 'Stand-up', type: 'meeting', start: 540, dur: 15, icon: null, subtasks: [], done: false }
+  ];
+  assert.strictEqual(L.isPristineTemplate(template, template), true);
+  assert.strictEqual(L.isPristineTemplate([
+    { title: 'Stand-up', type: 'meeting', start: 540, dur: 15, icon: null, subtasks: [{ text: 'A', done: true }], done: false }
+  ], template), false);
+  assert.strictEqual(L.isPristineTemplate(template.concat([
+    { title: 'Extra', type: 'quick', start: 600, dur: 30, subtasks: [], done: false }
+  ]), template), false);
+  assert.strictEqual(L.isPristineTemplate([
+    { title: 'Stand-up', type: 'meeting', start: 600, dur: 15, icon: null, subtasks: [], done: false }
+  ], template), false);
+  assert.strictEqual(L.isPristineTemplate([
+    template[0],
+    { title: 'Serie', type: 'deep', start: 700, dur: 30, recurId: 'r', subtasks: [], done: true }
+  ], template), false);
+});
+
 test('Erfolgstoast nur nach echtem Speichern', () => {
   assert.strictEqual(L.saveMessage(true, false, null), null);
   assert.strictEqual(L.saveMessage(true, false, 'Gespeichert.'), 'Gespeichert.');
