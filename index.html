@@ -49,7 +49,7 @@
   <div id="app" class="app" hidden>
     <nav class="tabbar" aria-label="Bereiche">
       <span class="brand" aria-hidden="true"><img src="icons/icon.svg" alt="" width="32" height="32">Tagesplaner</span>
-      <button type="button" class="tab" data-tab="focus" data-icon="focus"><span>Jetzt</span></button>
+      <button type="button" class="tab" data-tab="focus" data-icon="focus"><span>Fokus</span></button>
       <button type="button" class="tab" data-tab="plan" data-icon="plan"><span>Heute</span></button>
       <button id="fab" type="button" class="fab" aria-label="Neu hinzufügen" data-icon="plus"><span class="fab-label">Neu</span></button>
       <button type="button" class="tab" data-tab="inbox" data-icon="inbox"><span>Später</span><i id="tab-inbox-count" class="tab-count" hidden aria-hidden="true"></i></button>
@@ -60,11 +60,12 @@
       <!-- Jetzt -->
       <section id="focus" class="view focus" aria-labelledby="focus-h">
         <header class="view-head">
+          <button id="focus-prev" type="button" class="icon-btn" aria-label="Vorheriger Tag" data-icon="chevronL"></button>
           <div class="head-text">
             <p id="focus-date" class="head-date"></p>
-            <h1 id="focus-h">Jetzt</h1>
+            <h1 id="focus-h">Fokusliste</h1>
           </div>
-          <time id="focus-clock" class="focus-clock"></time>
+          <button id="focus-next" type="button" class="icon-btn" aria-label="Nächster Tag" data-icon="chevron"></button>
         </header>
         <div id="focus-body" class="focus-body"></div>
       </section>
@@ -269,6 +270,18 @@
               <select id="s-start" class="select" aria-label="Tagesbeginn"></select>
               <span aria-hidden="true">bis</span>
               <select id="s-end" class="select" aria-label="Tagesende"></select>
+            </div>
+          </div>
+          <div class="row-field">
+            <span id="lbl-lunch">Mittagspause<small>Teilt Vormittag und Nachmittag</small></span>
+            <div class="range-pick" role="group" aria-labelledby="lbl-lunch">
+              <select id="s-lunch" class="select" aria-label="Beginn der Mittagspause"></select>
+              <select id="s-lunch-dur" class="select" aria-label="Dauer der Mittagspause">
+                <option value="30">30 Min</option>
+                <option value="45">45 Min</option>
+                <option value="60">1 Std</option>
+                <option value="90">1 Std 30</option>
+              </select>
             </div>
           </div>
           <div class="row-field">
