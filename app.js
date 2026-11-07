@@ -831,7 +831,7 @@
     let html = '';
 
     if (!state.tipsSeen && blocks.length) {
-      html += '<section class="card-note tips"><p>' + icon('grip') + '<span><b>Tipp:</b> Symbol ziehen verschiebt, die Unterkante ändert die Dauer, der Kreis hakt ab.</span></p>' +
+      html += '<section class="card-note tips"><p>' + icon('grip') + '<span><b>Tipp:</b> Zum Verschieben: Griff ziehen. Zum Ändern der Dauer: Unterkante ziehen. Zum Abhaken: Symbol tippen.</span></p>' +
         '<button type="button" class="icon-btn" data-act="tips-ok" aria-label="Tipp ausblenden">' + icon('close') + '</button></section>';
     }
 
@@ -984,7 +984,7 @@
       (parts.length ? ' has-overlap' : '') + (open ? ' open' : '') + '" data-id="' + b.id + '"' +
       ' style="top:' + top + 'px;height:' + h + 'px;left:0;width:100%;--stack:' + (stack || 1) + '">' +
       '<button type="button" class="bubble no-drag" data-done aria-pressed="' + b.done + '" aria-label="' + doneLabel + '"><span class="bubble-fill"></span>' + icon(b.done ? 'check' : ic) + '</button>' +
-      '<div class="card" tabindex="0" title="' + esc(b.title + ' · ' + fmt(b.start) + '–' + fmt(b.start + b.dur)) + '" aria-roledescription="Zeitblock" aria-label="' + esc(label) + '. Enter bearbeiten, Leertaste abhaken, Pfeiltasten verschieben, Umschalt+Pfeile Dauer.">' +
+      '<div class="card" tabindex="0" title="' + esc(b.title + ' · ' + fmt(b.start) + '–' + fmt(b.start + b.dur)) + '" aria-roledescription="Zeitblock" aria-label="' + esc(label) + '. Enter bearbeitet. Leertaste hakt ab. Pfeiltasten verschieben. Umschalt und Pfeile ändern die Dauer.">' +
         hatch +
         '<span class="card-meta"><span class="card-time">' + fmt(b.start) + '–' + fmt(b.start + b.dur) + '</span><span class="card-dur"> · ' + durText(b.dur) + '</span><span class="card-live"></span>' +
           (parts.length ? '<span class="overlap-hint">Überschneidung</span>' : '') +
@@ -1491,7 +1491,7 @@
   const minDur = () => 5;
 
   // ==================================================================
-  // Ziehen: Griff verschiebt, Unterkante ändert die Dauer.
+  // Ziehen: Griff verschiebt. Unterkante ändert die Dauer.
   // Tippen auf die Karte öffnet den Block. Tippen auf den Griff tut nichts.
   // Wischen nach rechts hakelt ab.
   // ==================================================================
