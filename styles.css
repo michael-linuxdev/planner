@@ -335,7 +335,8 @@ body[data-tab="focus"] #focus, body[data-tab="plan"] #plan, body[data-tab="inbox
   touch-action: pan-y; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
   transition: top .24s var(--ease), height .24s var(--ease);
 }
-.item:hover, .item:focus-within { z-index: 3; }
+.item { z-index: var(--stack, 1); }
+.item:hover, .item:focus-within { z-index: calc(var(--stack, 1) + 1); }
 .bubble {
   position: relative; flex: none; align-self: stretch; width: 48px; min-width: 48px; margin-right: 8px;
   -webkit-appearance: none; appearance: none;
@@ -386,18 +387,29 @@ html[data-hand="left"] .nobubble .card { border-radius: 0 16px 16px 0; }
 .card-icon .icon { width: 20px; height: 20px; }
 .t-buffer .card { border: 1.5px dashed color-mix(in srgb, var(--c-solid) 70%, transparent); background: transparent; }
 [data-contrast="high"] .card { box-shadow: inset 0 0 0 2px var(--c-solid); }
-.card-text { min-width: 0; }
+.card-text { min-width: 0; position: relative; z-index: 1; }
+.badge, .sub-toggle { position: relative; z-index: 1; }
+.overlap {
+  position: absolute; left: 0; right: 0; z-index: 0; pointer-events: none;
+  background: repeating-linear-gradient(-45deg, transparent, transparent 5px, color-mix(in srgb, var(--c-solid) 32%, transparent) 5px, color-mix(in srgb, var(--c-solid) 32%, transparent) 7px);
+  box-shadow: inset 0 1.5px 0 var(--c-solid), inset 0 -1.5px 0 var(--c-solid);
+}
+.overlap-hint {
+  flex: none; margin-left: auto; padding: 1px 7px; border-radius: 999px;
+  background: var(--surface); color: var(--ink); font-size: 11px; font-weight: 750;
+  border: 1px dashed var(--c-solid);
+}
 .card-title {
   font-weight: 650; font-size: 16px; line-height: 1.25;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  hyphens: manual; -webkit-hyphens: manual; word-break: normal; overflow-wrap: normal;
+  hyphens: none; -webkit-hyphens: none; word-break: normal; overflow-wrap: normal;
 }
 .card-meta {
-  grid-column: 1 / -1; display: flex; align-items: center; gap: 4px; min-width: 0;
-  font-size: 12.5px; color: var(--ink-3); font-weight: 600; white-space: nowrap; overflow: hidden;
-  font-variant-numeric: tabular-nums;
+  grid-column: 1 / -1; display: flex; align-items: center; flex-wrap: wrap; gap: 4px; min-width: 0;
+  font-size: 12.5px; color: var(--ink-3); font-weight: 600;
+  font-variant-numeric: tabular-nums; position: relative; z-index: 1;
 }
-.card-time { overflow: hidden; text-overflow: ellipsis; }
+.card-time, .card-dur { flex: none; white-space: nowrap; hyphens: none; -webkit-hyphens: none; }
 .card-meta .rep .icon { width: 14px; height: 14px; }
 /* Kurze Blöcke (15 Min = 45 px): Zeit klein oben, Titel darunter – der Titel bekommt die ganze Breite.
    Status („in 8 Min“) steht dann in der Zeitzeile statt als Pille. Sehr kurze Blöcke: nur der Titel. */
@@ -418,7 +430,7 @@ html[data-hand="left"] .nobubble .card { border-radius: 0 16px 16px 0; }
 .roomy .card-title {
   width: 100%;
   white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-  hyphens: manual; -webkit-hyphens: manual; word-break: normal; overflow-wrap: break-word;
+  hyphens: none; -webkit-hyphens: none; word-break: normal; overflow-wrap: normal;
 }
 .roomy .badge { grid-row: 3; grid-column: 2; }
 .roomy .sub-toggle { grid-row: 3; grid-column: 3; }
@@ -810,7 +822,7 @@ input[role="switch"]:checked::after { transform: translateX(20px); }
 /* Toast */
 .toast {
   position: fixed; left: 50%; bottom: calc(92px + env(safe-area-inset-bottom)); z-index: 300;
-  display: flex; align-items: center; gap: 12px; max-width: calc(100% - 24px); width: max-content;
+  display: flex; align-items: center; flex-wrap: wrap; justify-content: center; gap: 8px; max-width: calc(100% - 24px); width: max-content;
   padding: 8px 8px 8px 16px; min-height: 52px; border-radius: 16px;
   background: var(--ink); color: var(--bg); box-shadow: var(--shadow-lift); font-weight: 600; font-size: 14.5px;
   transform: translate(-50%, 16px); opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s;

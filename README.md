@@ -11,7 +11,7 @@ Live: **<https://planner.micana.de>**
 | Ansicht | Was du siehst |
 |---|---|
 | **Jetzt** (Start) | Der laufende Block mit Countdown-Ring, Unteraufgaben zum Abhaken, „Erledigt“, „+5 Min“ und was als Nächstes kommt. Außerhalb geplanter Zeit: ruhiger Hinweis („Gleich geht’s los“, „Freie Zeit“, „Feierabend“). |
-| **Heute** | Tag, Woche oder Monat. Tag: Zeitleiste. Der Griff zum Verschieben sitzt rechts (rechter Daumen), das Symbol links hakt ab. Unter Mehr lässt sich das für Linkshänder spiegeln. Woche: die sieben Tage mit Blöcken. Monat: Kalender mit Punkten und Anzahl. |
+| **Heute** | Tag, Woche oder Monat. Tag: Zeitleiste. Der Griff zum Verschieben sitzt rechts (rechter Daumen), das Symbol links hakt ab. Überlappende Blöcke bleiben in voller Breite und sind schraffiert. Unter Mehr lässt sich die Lage für Linkshänder spiegeln. Woche: die sieben Tage mit Blöcken. Monat: Kalender mit Punkten und Anzahl. |
 | **Später** | Alles ohne Uhrzeit. „Einplanen“ → im Plan auf eine Uhrzeit tippen (oder „Nächste Lücke“). |
 
 Alles andere steckt im Menü **Mehr**: Tag abschließen, Tag neu planen, In Kalender übernehmen (.ics), Energie-Check-in, Vorlagen, Rolle, Darstellung (Hell/Dunkel, Kontrast, Farben, Tagesbereich, Raster), Erinnerungen, Sicherung.

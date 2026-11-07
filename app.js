@@ -466,7 +466,12 @@
     render();
     const msg = TL.saveMessage(saved, !persistOk, label);
     if (!saved) { if (msg) toast(msg); return result; }
-    if (label) toast(label, opts.noUndo ? null : { label: 'Rückgängig', fn: undo });
+    if (label) {
+      const actions = [];
+      if (!opts.noUndo) actions.push({ label: 'Rückgängig', fn: undo });
+      if (opts.also) actions.push(opts.also);
+      toast(label, actions.length ? actions : null);
+    }
     return result;
   }
   function undo() {
@@ -506,11 +511,12 @@
   function toast(msg, action) {
     const host = toastHost();
     if (el.toast.parentNode !== host) host.appendChild(el.toast);
-    el.toast.innerHTML = '<span>' + esc(msg) + '</span>' + (action ? '<button type="button" class="btn small">' + esc(action.label) + '</button>' : '');
-    if (action) el.toast.querySelector('button').addEventListener('click', () => { hideToast(); action.fn(); });
+    const actions = !action ? [] : Array.isArray(action) ? action : [action];
+    el.toast.innerHTML = '<span>' + esc(msg) + '</span>' + actions.map((a) => '<button type="button" class="btn small">' + esc(a.label) + '</button>').join('');
+    el.toast.querySelectorAll('button').forEach((btn, i) => btn.addEventListener('click', () => { hideToast(); actions[i].fn(); }));
     el.toast.classList.add('show');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(hideToast, action ? 6000 : 2600);
+    toastTimer = setTimeout(hideToast, actions.length ? 6000 : 2600);
   }
   function hideToast() { el.toast.classList.remove('show'); }
 
@@ -953,54 +959,35 @@
   function yA(t) { let y = (t - G.start) * PPM; for (const x of G.extras) if (x.at <= t) y += x.h; return y; }
   function yB(t) { let y = (t - G.start) * PPM; for (const x of G.extras) if (x.at < t) y += x.h; return y; }
 
-  function layoutLanes(list) {
-    const sorted = list.slice().sort((a, b) => a.start - b.start || b.dur - a.dur);
-    const out = new Map();
-    let cluster = [], lanesEnd = [], clusterEnd = -Infinity;
-    const flush = () => { cluster.forEach(({ b, lane }) => out.set(b.id, { lane, lanes: lanesEnd.length })); cluster = []; lanesEnd = []; };
-    for (const b of sorted) {
-      if (cluster.length && b.start >= clusterEnd) flush();
-      let lane = lanesEnd.findIndex((end) => end <= b.start);
-      if (lane === -1) { lane = lanesEnd.length; lanesEnd.push(0); }
-      lanesEnd[lane] = b.start + b.dur;
-      cluster.push({ b, lane });
-      clusterEnd = Math.max(cluster.length === 1 ? -Infinity : clusterEnd, b.start + b.dur);
-    }
-    flush();
-    return out;
-  }
-  function laneBox(pos) {
-    const n = pos.lanes, i = pos.lane, gap = n > 1 ? 4 : 0;
-    if (i === 0) return { left: '0px', width: 'calc(' + BUBBLE + 'px + (100% - ' + BUBBLE + 'px) / ' + n + ' - ' + gap + 'px)', cardLeft: BUBBLE + 'px' };
-    const left = 'calc(' + BUBBLE + 'px + ' + i + ' * (100% - ' + BUBBLE + 'px) / ' + n + ')';
-    return { left, width: 'calc((100% - ' + BUBBLE + 'px) / ' + n + ' - ' + gap + 'px)', cardLeft: left };
-  }
-
-  function itemHtml(b, pos) {
+  function itemHtml(b, slices, stack) {
     const t = TYPES[b.type];
     const top = yA(b.start);
     const h = Math.max(yB(b.start + b.dur) - top, 15);
     const compact = h < 60, tiny = h < 42, micro = h < 24, roomy = h >= 90;
     const ic = b.icon || b.type;
-    const box = laneBox(pos);
     const open = openIds.has(b.id) && b.subtasks.length > 0;
     const doneSubs = b.subtasks.filter((s) => s.done).length;
     const sub = b.subtasks.length
       ? '<button type="button" class="sub-toggle no-drag" aria-expanded="' + open + '" aria-label="Unteraufgaben ' + (open ? 'zuklappen' : 'aufklappen') + ', ' + doneSubs + ' von ' + b.subtasks.length + ' erledigt">' + icon('chevron') + '<span>' + doneSubs + '/' + b.subtasks.length + '</span></button>'
       : '';
-    const label = t.label + ': ' + b.title + ', ' + fmt(b.start) + ' bis ' + fmt(b.start + b.dur) + (b.done ? ', erledigt' : '');
+    const parts = slices || [];
+    const hatch = parts.map((s) => {
+      const topPct = ((s.start - b.start) / b.dur) * 100;
+      const hPct = ((s.end - s.start) / b.dur) * 100;
+      return '<span class="overlap" style="top:' + topPct.toFixed(2) + '%;height:' + hPct.toFixed(2) + '%"></span>';
+    }).join('');
+    const label = t.label + ': ' + b.title + ', ' + fmt(b.start) + ' bis ' + fmt(b.start + b.dur) + (b.done ? ', erledigt' : '') + (parts.length ? ', Überschneidung' : '');
     const doneLabel = (b.done ? 'Wieder öffnen' : 'Abhaken') + ': ' + esc(b.title);
-    const hasBubble = pos.lane === 0;
-    const lead = (state.leftHand ? GRIP : 0) + (!state.leftHand && hasBubble ? BUBBLE : 0);
-    const tail = (!state.leftHand ? GRIP : 0) + (state.leftHand && hasBubble ? BUBBLE : 0);
+    const lead = state.leftHand ? GRIP : BUBBLE;
+    const tail = state.leftHand ? BUBBLE : GRIP;
     let html = '<div class="item t-' + b.type + (compact ? ' compact' : '') + (tiny ? ' tiny' : '') + (micro ? ' micro' : '') + (roomy ? ' roomy' : '') + (b.done ? ' done' : '') +
-      (hasBubble ? '' : ' nobubble') + (pos.lanes > 1 ? ' laned' : '') + (open ? ' open' : '') + '" data-id="' + b.id + '"' +
-      ' style="top:' + top + 'px;height:' + h + 'px;left:' + box.left + ';width:' + box.width + '">' +
-      (hasBubble
-        ? '<button type="button" class="bubble no-drag" data-done aria-pressed="' + b.done + '" aria-label="' + doneLabel + '"><span class="bubble-fill"></span>' + icon(b.done ? 'check' : ic) + '</button>'
-        : '<button type="button" class="card-icon no-drag" data-done aria-pressed="' + b.done + '" aria-label="' + doneLabel + '">' + icon(b.done ? 'check' : ic) + '</button>') +
+      (parts.length ? ' has-overlap' : '') + (open ? ' open' : '') + '" data-id="' + b.id + '"' +
+      ' style="top:' + top + 'px;height:' + h + 'px;left:0;width:100%;--stack:' + (stack || 1) + '">' +
+      '<button type="button" class="bubble no-drag" data-done aria-pressed="' + b.done + '" aria-label="' + doneLabel + '"><span class="bubble-fill"></span>' + icon(b.done ? 'check' : ic) + '</button>' +
       '<div class="card" tabindex="0" title="' + esc(b.title + ' · ' + fmt(b.start) + '–' + fmt(b.start + b.dur)) + '" aria-roledescription="Zeitblock" aria-label="' + esc(label) + '. Enter bearbeiten, Leertaste abhaken, Pfeiltasten verschieben, Umschalt+Pfeile Dauer.">' +
+        hatch +
         '<span class="card-meta"><span class="card-time">' + fmt(b.start) + '–' + fmt(b.start + b.dur) + '</span><span class="card-dur"> · ' + durText(b.dur) + '</span><span class="card-live"></span>' +
+          (parts.length ? '<span class="overlap-hint">Überschneidung</span>' : '') +
           (b.recurId ? '<span class="rep" title="Wiederholt sich">' + icon('repeat') + '</span>' : '') + '</span>' +
         '<span class="card-text"><span class="card-title">' + esc(b.title) + '</span></span>' +
         '<span class="badge"></span>' + sub +
@@ -1011,7 +998,7 @@
     if (open) {
       let extraBefore = 0;
       for (const x of G.extras) { if (x.id === b.id) break; if (x.at === b.start + b.dur) extraBefore += x.h; }
-      html += '<div class="subpanel t-' + b.type + '" data-for="' + b.id + '" style="top:' + (yB(b.start + b.dur) + extraBefore) + 'px;height:' + (subPanelHeight(b) - 6) + 'px;left:calc(' + box.left + ' + ' + lead + 'px);width:calc(' + box.width + ' - ' + (lead + tail) + 'px)">' +
+      html += '<div class="subpanel t-' + b.type + '" data-for="' + b.id + '" style="top:' + (yB(b.start + b.dur) + extraBefore) + 'px;height:' + (subPanelHeight(b) - 6) + 'px;left:' + lead + 'px;width:calc(100% - ' + (lead + tail) + 'px)">' +
         '<ul>' + b.subtasks.map((s) => '<li><label class="check-row"><input type="checkbox" data-sub="' + s.id + '"' + (s.done ? ' checked' : '') + '><span>' + esc(s.text) + '</span></label></li>').join('') + '</ul>' +
         '<form class="sub-add"><input type="text" name="text" maxlength="80" placeholder="Unteraufgabe hinzufügen …" aria-label="Neue Unteraufgabe" enterkeyhint="done" autocomplete="off">' +
         '<button type="submit" class="icon-btn" aria-label="Hinzufügen">' + icon('plus') + '</button></form></div>';
@@ -1030,9 +1017,9 @@
       if (m + 30 < G.end) g += '<div class="gridline half" style="top:' + yA(m + 30) + 'px"></div>';
     }
     el.grid.innerHTML = g;
-    const lanes = layoutLanes(blocks);
-    el.items.innerHTML = blocks.slice().sort((a, b) => a.start - b.start).map((b) => {
-      try { return itemHtml(b, lanes.get(b.id) || { lane: 0, lanes: 1 }); }
+    const overlap = new Map(TL.overlapSlices(blocks).map((x) => [x.id, x.slices]));
+    el.items.innerHTML = blocks.slice().sort((a, b) => a.start - b.start).map((b, i) => {
+      try { return itemHtml(b, overlap.get(b.id) || [], i + 1); }
       catch (e) { return ''; }
     }).join('');
   }
@@ -1632,8 +1619,23 @@
     if (t) t.textContent = fmt(d.cur.start) + '–' + fmt(d.cur.start + d.cur.dur);
     const dd = d.node.querySelector('.card-dur');
     if (dd) dd.textContent = ' · ' + durText(d.cur.dur);
-    const badge = d.node.querySelector('.badge');
-    if (badge) badge.textContent = d.mode === 'resize' ? durText(d.cur.dur) : fmt(d.cur.start);
+  }
+
+  function pushFollowers(id) {
+    const blocks = getDay(viewKey).blocks;
+    const next = TL.pushFollowing(blocks, id);
+    const moved = next.some((b) => {
+      const cur = blocks.find((x) => x.id === b.id);
+      return cur && cur.start !== b.start;
+    });
+    if (!moved) return;
+    mutate('Nachfolgende verschoben.', () => {
+      const day = materialize(viewKey);
+      next.forEach((b) => {
+        const x = day.blocks.find((y) => y.id === b.id);
+        if (x) x.start = b.start;
+      });
+    });
   }
 
   function autoScroll() {
@@ -1688,10 +1690,16 @@
         if (moved < 6 && d.mode === 'move' && !d.fromGrip) openEditor({ kind: 'block', id: d.id });
         return;
       }
+      const preview = getDay(viewKey).blocks.map((b) => b.id === d.id ? { id: b.id, start: d.cur.start, dur: d.cur.dur } : { id: b.id, start: b.start, dur: b.dur });
+      const shifted = TL.pushFollowing(preview, d.id);
+      const canPush = shifted.some((b) => {
+        const cur = preview.find((x) => x.id === b.id);
+        return cur && cur.start !== b.start;
+      });
       mutate(d.mode === 'resize' ? 'Dauer: ' + durText(d.cur.dur) + '.' : 'Verschoben auf ' + fmt(d.cur.start) + '.', () => {
         const x = materialize(viewKey).blocks.find((y) => y.id === d.id);
         x.start = d.cur.start; x.dur = d.cur.dur;
-      });
+      }, canPush ? { also: { label: 'Nachfolgende verschieben', fn: () => pushFollowers(d.id) } } : undefined);
       settle(d.id, from);
       haptic();
       announce(fmt(d.cur.start) + ' bis ' + fmt(d.cur.start + d.cur.dur));

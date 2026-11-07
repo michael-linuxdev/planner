@@ -123,6 +123,43 @@
     return dx >= 48 && dx > Math.abs(dy) * 1.5;
   }
 
+  function overlapSlices(blocks) {
+    const list = (blocks || []).filter((b) => b && b.id != null && Number.isFinite(b.start) && Number.isFinite(b.dur));
+    return list.map((a) => {
+      const slices = [];
+      list.forEach((b) => {
+        if (b.id === a.id) return;
+        const start = Math.max(a.start, b.start);
+        const end = Math.min(a.start + a.dur, b.start + b.dur);
+        if (end > start) slices.push({ start, end });
+      });
+      slices.sort((x, y) => x.start - y.start);
+      const merged = [];
+      slices.forEach((s) => {
+        const last = merged[merged.length - 1];
+        if (last && s.start <= last.end) last.end = Math.max(last.end, s.end);
+        else merged.push({ start: s.start, end: s.end });
+      });
+      return { id: a.id, slices: merged };
+    }).filter((x) => x.slices.length);
+  }
+
+  function pushFollowing(blocks, id) {
+    const list = (blocks || []).filter((b) => b && b.id != null).map((b) => ({ id: b.id, start: b.start, dur: b.dur }));
+    list.sort((a, b) => a.start - b.start || String(a.id).localeCompare(String(b.id)));
+    const anchor = list.find((b) => b.id === id);
+    if (!anchor) return list;
+    let cursor = anchor.start + anchor.dur;
+    list.forEach((b) => {
+      if (b.id === id || b.start < anchor.start) return;
+      if (b.start < cursor) {
+        b.start = Math.min(Math.max(cursor, 0), Math.max(0, DAY - b.dur));
+        cursor = b.start + b.dur;
+      } else cursor = Math.max(cursor, b.start + b.dur);
+    });
+    return list;
+  }
+
   function pullTime(title, dur) {
     const m = /^(\d{1,2})[:.](\d{2})\s+(.+)$/.exec(String(title || '').trim());
     if (!m) return null;
@@ -133,5 +170,5 @@
     return { title: m[3].slice(0, 80), start: fit.start, dur: fit.dur };
   }
 
-  return { isSafeId, takeId, weekday, isWeekend, fitTime, ruleHits, icsUid, saveMessage, pullTime, isPristineTemplate, pickSuggestions, swipeDone, DAY };
+  return { isSafeId, takeId, weekday, isWeekend, fitTime, ruleHits, icsUid, saveMessage, pullTime, isPristineTemplate, pickSuggestions, swipeDone, overlapSlices, pushFollowing, DAY };
 });

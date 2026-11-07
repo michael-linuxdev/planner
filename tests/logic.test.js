@@ -108,6 +108,29 @@ test('Vorschläge kommen aus der Rolle und kennen die Lücken', () => {
   assert.strictEqual(full[0].title, 'Posts schreiben');
 });
 
+test('Überlappung bleibt markiert, Nachfolgende rücken nach', () => {
+  const blocks = [
+    { id: 'a', start: 15 * 60 + 45, dur: 70 },
+    { id: 'b', start: 16 * 60 + 45, dur: 45 },
+    { id: 'c', start: 17 * 60 + 30, dur: 30 }
+  ];
+  const slices = L.overlapSlices(blocks);
+  const a = slices.find((s) => s.id === 'a').slices;
+  const b = slices.find((s) => s.id === 'b').slices;
+  assert.deepStrictEqual(a, [{ start: 16 * 60 + 45, end: 16 * 60 + 55 }]);
+  assert.deepStrictEqual(b, [{ start: 16 * 60 + 45, end: 16 * 60 + 55 }]);
+  assert.strictEqual(L.overlapSlices([{ id: 'a', start: 9 * 60, dur: 30 }, { id: 'b', start: 10 * 60, dur: 30 }]).length, 0);
+  const pushed = L.pushFollowing(blocks, 'a');
+  assert.strictEqual(pushed.find((x) => x.id === 'a').start, 15 * 60 + 45);
+  assert.strictEqual(pushed.find((x) => x.id === 'b').start, 16 * 60 + 55);
+  assert.strictEqual(pushed.find((x) => x.id === 'c').start, 16 * 60 + 55 + 45);
+  const earlier = L.pushFollowing([
+    { id: 'early', start: 15 * 60, dur: 90 },
+    { id: 'late', start: 16 * 60, dur: 30 }
+  ], 'late');
+  assert.strictEqual(earlier.find((x) => x.id === 'early').start, 15 * 60);
+});
+
 test('Wischen nach rechts hakelt ab, senkrecht bleibt Scrollen', () => {
   assert.strictEqual(L.swipeDone(48, 0), true);
   assert.strictEqual(L.swipeDone(80, 20), true);
