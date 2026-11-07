@@ -81,6 +81,15 @@ test('Unberührte Wochenend-Vorlage ist erkennbar, bearbeitete nicht', () => {
   ], template), false);
 });
 
+test('Alte Arten werden zu Fokus oder Kleinkram', () => {
+  assert.strictEqual(L.canonicalType('deep'), 'deep');
+  assert.strictEqual(L.canonicalType('focused'), 'deep');
+  assert.strictEqual(L.canonicalType('reactive'), 'quick');
+  assert.strictEqual(L.canonicalType('flexible'), 'quick');
+  assert.strictEqual(L.canonicalType('meeting'), 'meeting');
+  assert.strictEqual(L.canonicalType('unbekannt'), 'quick');
+});
+
 test('Vorschläge kommen aus der Rolle und kennen die Lücken', () => {
   const catalog = [
     { title: 'Posts schreiben', type: 'deep', dur: 90, start: 9 * 60, icon: 'pen' },

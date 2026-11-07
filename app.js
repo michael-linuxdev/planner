@@ -24,7 +24,7 @@
   // ==================================================================
   const ICONS = {
     // Block-Arten
-    deep: '<path d="M3 14v-2a9 9 0 0 1 18 0v2"/><rect x="2.5" y="14" width="5" height="7" rx="2"/><rect x="16.5" y="14" width="5" height="7" rx="2"/>',
+    deep: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/>',
     focused: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/>',
     reactive: '<path d="M21 12a8.5 8.5 0 0 1-12.3 7.6L3.5 21l1.4-4.8A8.5 8.5 0 1 1 21 12z"/><path d="M12.5 8l-2 4h3l-2 4"/>',
     meeting: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.5"/><path d="M16.5 14.1A5 5 0 0 1 21.5 19"/>',
@@ -101,21 +101,24 @@
   // Block-Arten (Farben in styles.css unter .t-<art>)
   // ==================================================================
   const TYPES = {
-    deep:     { label: 'Deep Work',     hint: 'Tiefe Konzentration, keine Unterbrechungen' },
-    focused:  { label: 'Focused',       hint: 'Konzentriert, aber leichter' },
-    reactive: { label: 'Reactive',      hint: 'Auf Anfragen und Nachrichten reagieren' },
-    meeting:  { label: 'Meeting',       hint: 'Termin mit anderen' },
-    pause:    { label: 'Pause',         hint: 'Erholen, essen, bewegen' },
-    buffer:   { label: 'Buffer',        hint: 'Luft für Übergänge und Unerwartetes' },
-    quick:    { label: 'Quick / Admin', hint: 'Kleine, schnelle Aufgaben' },
-    flexible: { label: 'Flexible',      hint: 'Frei einteilbar' }
+    deep:    { label: 'Fokus',     hint: 'Konzentriert arbeiten, ohne Unterbrechung' },
+    meeting: { label: 'Termin',    hint: 'Zeit mit anderen' },
+    pause:   { label: 'Pause',     hint: 'Erholen, essen, bewegen' },
+    buffer:  { label: 'Puffer',    hint: 'Luft für Übergänge und Unerwartetes' },
+    quick:   { label: 'Kleinkram', hint: 'Kleine, schnelle Aufgaben' }
   };
   const TYPE_ORDER = Object.keys(TYPES);
-  const FOCUS_TYPES = ['deep', 'focused'];
-  // Beim Anlegen zeigen wir nur vier einfache Arten; alle acht bleiben unter „Mehr Typen“.
-  const SIMPLE = { deep: 'Fokus', meeting: 'Termin', pause: 'Pause', quick: 'Kleinkram' };
-  const MAIN_TYPES = Object.keys(SIMPLE);
-  const typeLabel = (t) => SIMPLE[t] || TYPES[t].label;
+  const FOCUS_TYPES = ['deep'];
+  const typeLabel = (t) => (TYPES[t] ? TYPES[t].label : 'Kleinkram');
+  const ICON_NAME = {
+    deep: 'Fokus', focused: 'Zielscheibe', reactive: 'Gespräch', meeting: 'Personen',
+    pause: 'Pause', buffer: 'Sanduhr', quick: 'Liste', flexible: 'Welle',
+    code: 'Klammern', laptop: 'Rechner', mail: 'Brief', phone: 'Telefon', book: 'Buch',
+    pen: 'Stift', chart: 'Diagramm', camera: 'Kamera', calendar: 'Kalender', food: 'Essen',
+    walk: 'Gehen', sport: 'Sport', heart: 'Herz', home: 'Haus', car: 'Wagen', cart: 'Einkauf',
+    music: 'Musik', sprout: 'Pflanze', pill: 'Tablette', bed: 'Bett', sun: 'Sonne', moon: 'Mond',
+    star: 'Stern', smile: 'Lächeln', child: 'Kind', bell: 'Glocke'
+  };
 
   // ==================================================================
   // Rollen + Vorlagen  [Start, Dauer, Art, Titel, Unteraufgaben, Symbol]
@@ -124,77 +127,79 @@
   const ROLES = {
     dev: {
       name: 'Entwickler', icon: 'roleDev', palette: 'cool',
-      desc: 'Fokus am Vormittag, Meetings gebündelt.',
+      desc: 'Fokus am Vormittag, Termine gebündelt.',
+      types: ['deep', 'meeting', 'pause', 'buffer', 'quick'],
       template: [
-        ['08:00', 15, 'quick', 'Tagesüberblick', ['Kalender ansehen', 'Top 3 für heute festlegen'], 'sun'],
-        ['08:15', 15, 'reactive', 'Mails sichten', ['Nur sichten, nicht alles beantworten'], 'mail'],
-        ['08:30', 15, 'meeting', 'Stand-up', []],
+        ['08:00', 15, 'quick', 'Tagesüberblick', ['Kalender ansehen', 'Die drei wichtigsten Punkte'], 'sun'],
+        ['08:15', 15, 'quick', 'Post sichten', ['Nur sichten, nicht alles beantworten'], 'mail'],
+        ['08:30', 15, 'meeting', 'Morgenrunde', []],
         ['08:45', 15, 'buffer', 'Puffer', []],
-        ['09:00', 120, 'deep', 'Feature entwickeln', ['Ticket & Akzeptanzkriterien lesen', 'Tests schreiben', 'Implementieren', 'Self-Review & Commit'], 'code'],
+        ['09:00', 120, 'deep', 'Funktion bauen', ['Aufgabe lesen', 'Prüfungen vorbereiten', 'Umsetzen', 'Selbst prüfen'], 'code'],
         ['11:00', 15, 'pause', 'Bewegungspause', ['Aufstehen, Wasser trinken'], 'walk'],
-        ['11:15', 45, 'focused', 'Code Reviews', ['Offene Pull Requests prüfen', 'Feedback geben']],
+        ['11:15', 45, 'deep', 'Änderungen prüfen', ['Offene Änderungen ansehen', 'Rückmeldung geben']],
         ['12:00', 45, 'pause', 'Mittagspause', [], 'food'],
         ['12:45', 15, 'buffer', 'Wieder ankommen', []],
-        ['13:00', 45, 'reactive', 'Bugs & Support-Anfragen', ['Tickets priorisieren', 'Kurz antworten']],
-        ['13:45', 45, 'meeting', 'Refinement / Planung', []],
+        ['13:00', 45, 'quick', 'Fehler und Anfragen', ['Dringendes zuerst', 'Kurz antworten']],
+        ['13:45', 45, 'meeting', 'Planung', []],
         ['14:30', 15, 'pause', 'Kurze Pause', []],
-        ['14:45', 90, 'deep', 'Refactoring', ['Bereich auswählen', 'Schrittweise umbauen', 'Tests grün?'], 'code'],
+        ['14:45', 90, 'deep', 'Umbau', ['Bereich auswählen', 'Schrittweise umbauen', 'Prüfungen in Ordnung?'], 'code'],
         ['16:15', 15, 'buffer', 'Puffer', []],
-        ['16:30', 45, 'flexible', 'Dokumentation', ['README ergänzen'], 'book'],
-        ['17:15', 30, 'quick', 'Zeiten buchen', ['Zeiten buchen', 'Ticketstatus aktualisieren']],
+        ['16:30', 45, 'quick', 'Dokumentation', ['Anleitung ergänzen'], 'book'],
+        ['17:15', 30, 'quick', 'Zeiten buchen', ['Zeiten eintragen', 'Aufgabenstand aktualisieren']],
         ['17:45', 15, 'quick', 'Tagesabschluss', ['Notizen für morgen', 'Rechner zuklappen'], 'moon']
       ]
     },
     social: {
-      name: 'Social Media Managerin', icon: 'roleSocial', palette: 'warm',
-      desc: 'Kreativzeit zuerst, Community zu festen Zeiten.',
+      name: 'Beiträge und Kanäle', icon: 'roleSocial', palette: 'warm',
+      desc: 'Kreativzeit zuerst, Austausch zu festen Zeiten.',
+      types: ['deep', 'meeting', 'pause', 'quick'],
       template: [
-        ['08:00', 30, 'reactive', 'Kommentare & DMs', ['Dringendes beantworten', 'Rest markieren']],
+        ['08:00', 30, 'quick', 'Kommentare und Nachrichten', ['Dringendes beantworten', 'Rest merken']],
         ['08:30', 15, 'quick', 'Zahlen von gestern', ['Reichweite von gestern notieren'], 'chart'],
-        ['08:45', 15, 'meeting', 'Team-Check', []],
-        ['09:00', 90, 'deep', 'Posts schreiben', ['Reel-Skript schreiben', 'Grafiken gestalten', 'Captions & Hashtags'], 'camera'],
+        ['08:45', 15, 'meeting', 'Kurzes Treffen', []],
+        ['09:00', 90, 'deep', 'Beiträge schreiben', ['Kurzvideo-Text', 'Bilder gestalten', 'Begleittext und Schlagwörter'], 'camera'],
         ['10:30', 15, 'pause', 'Pause', ['Bildschirm weg, kurz raus']],
-        ['10:45', 45, 'focused', 'Redaktionsplan', ['Nächste Woche füllen', 'Themen abstimmen'], 'calendar'],
-        ['11:30', 30, 'reactive', 'Community', []],
+        ['10:45', 45, 'deep', 'Redaktionsplan', ['Nächste Woche füllen', 'Themen abstimmen'], 'calendar'],
+        ['11:30', 30, 'quick', 'Nachrichten', []],
         ['12:00', 45, 'pause', 'Mittagspause', [], 'food'],
-        ['12:45', 15, 'buffer', 'Puffer', []],
-        ['13:00', 45, 'meeting', 'Kundenabstimmung', ['Freigaben einholen'], 'phone'],
-        ['13:45', 15, 'buffer', 'Notizen', []],
-        ['14:00', 60, 'focused', 'Posts einplanen', ['Instagram', 'LinkedIn', 'TikTok']],
-        ['15:00', 30, 'reactive', 'Trends', []],
+        ['13:00', 45, 'meeting', 'Kundengespräch', ['Freigaben einholen'], 'phone'],
+        ['13:45', 15, 'quick', 'Notizen', []],
+        ['14:00', 60, 'deep', 'Beiträge einplanen', ['Die Kanäle füllen']],
+        ['15:00', 30, 'quick', 'Aktuelle Themen', []],
         ['15:30', 15, 'pause', 'Kurze Pause', []],
-        ['15:45', 45, 'flexible', 'Ideen sammeln', ['Ideen-Board ergänzen'], 'star'],
-        ['16:45', 30, 'quick', 'Reporting', ['Wochenzahlen eintragen', 'Mails'], 'chart'],
-        ['17:30', 20, 'reactive', 'Abschluss', ['Morgen vorbereiten']]
+        ['15:45', 60, 'deep', 'Ideen sammeln', ['Ideenliste ergänzen'], 'star'],
+        ['16:45', 45, 'quick', 'Bericht', ['Wochenzahlen eintragen', 'Nachrichten'], 'chart'],
+        ['17:30', 30, 'quick', 'Abschluss', ['Morgen vorbereiten']]
       ]
     },
     care: {
       name: 'Erzieherin / Sozial', icon: 'roleCare', palette: 'cool',
       desc: 'Gruppenalltag mit echten Pausen.',
+      types: ['deep', 'meeting', 'pause', 'buffer', 'quick'],
       template: [
         ['08:00', 15, 'buffer', 'Raum vorbereiten', []],
-        ['08:15', 45, 'reactive', 'Bringzeit', ['Kurze Übergaben mit Eltern', 'Besonderheiten notieren'], 'child'],
+        ['08:15', 45, 'quick', 'Bringzeit', ['Kurze Übergaben mit Eltern', 'Besonderheiten notieren'], 'child'],
         ['09:00', 15, 'meeting', 'Morgenkreis', [], 'smile'],
-        ['09:15', 60, 'focused', 'Projektarbeit', ['Material bereitlegen', 'Kleingruppe A', 'Kleingruppe B'], 'pen'],
-        ['10:30', 30, 'flexible', 'Freispiel', []],
-        ['11:00', 45, 'focused', 'Draußen', ['Wetterkleidung prüfen'], 'sun'],
-        ['11:45', 45, 'reactive', 'Mittagessen', [], 'food'],
-        ['12:30', 30, 'pause', 'Pause', ['Wirklich raus aus der Gruppe']],
-        ['13:00', 45, 'deep', 'Dokumentation', ['Beobachtungsbögen', 'Portfolio-Einträge', 'Entwicklungsbericht'], 'pen'],
+        ['09:15', 75, 'deep', 'Projektarbeit', ['Material bereitlegen', 'Kleine Gruppe A', 'Kleine Gruppe B'], 'pen'],
+        ['10:30', 30, 'quick', 'Freispiel', []],
+        ['11:00', 45, 'deep', 'Draußen', ['Wetterkleidung prüfen'], 'sun'],
+        ['11:45', 45, 'quick', 'Mittagessen', [], 'food'],
+        ['12:30', 30, 'pause', 'Eigene Pause', ['Wirklich raus aus der Gruppe']],
+        ['13:00', 60, 'deep', 'Dokumentation', ['Beobachtungsbögen', 'Mappeneinträge', 'Entwicklungsbericht'], 'pen'],
         ['14:00', 15, 'buffer', 'Puffer', []],
-        ['14:15', 45, 'reactive', 'Abholzeit', [], 'child'],
+        ['14:15', 45, 'quick', 'Abholzeit', [], 'child'],
         ['15:00', 15, 'pause', 'Kurze Pause', []],
-        ['15:15', 45, 'meeting', 'Teamsitzung', ['Fälle vorbereiten']],
-        ['16:15', 30, 'quick', 'Listen & Mails', [], 'mail'],
-        ['16:45', 30, 'flexible', 'Elterngespräch', ['Notizen sammeln', 'Termin bestätigen'], 'phone'],
-        ['17:30', 20, 'quick', 'Übergabe', ['Übergabebuch', 'Raum aufräumen'], 'moon']
+        ['15:15', 60, 'meeting', 'Besprechung', ['Fälle vorbereiten']],
+        ['16:15', 30, 'quick', 'Listen und Post', [], 'mail'],
+        ['16:45', 45, 'quick', 'Elterngespräch', ['Notizen sammeln', 'Termin bestätigen'], 'phone'],
+        ['17:30', 30, 'quick', 'Übergabe', ['Übergabebuch', 'Raum aufräumen'], 'moon']
       ]
     }
   };
 
   const ENERGY = [
     { v: 1, label: 'Sehr niedrig', tip: 'Sanfter Tag: Nimm dir nur das Wichtigste vor. Mehr Puffer und Pausen sind heute genau richtig.' },
-    { v: 2, label: 'Niedrig', tip: 'Plane heute etwas mehr Luft ein. Deep-Work-Blöcke dürfen kürzer sein.' },
+    { v: 2, label: 'Niedrig', tip: 'Plane heute etwas mehr Luft ein. Fokus-Blöcke dürfen kürzer sein.' },
     { v: 3, label: 'Mittel', tip: 'Ein normaler Tag. Pausen trotzdem ernst nehmen.' },
     { v: 4, label: 'Gut', tip: 'Gute Energie – nutze sie für deine Fokus-Blöcke.' },
     { v: 5, label: 'Voll', tip: 'Viel Energie! Achte darauf, dich nicht zu überplanen.' }
@@ -258,7 +263,7 @@
     const o = {
       id: nextId(b.id),
       title: String(b.title || '').slice(0, 80),
-      type: TYPES[b.type] ? b.type : 'flexible',
+      type: TL.canonicalType(b.type),
       icon: ICONS[b.icon] && PICKABLE.includes(b.icon) ? b.icon : null,
       start: fit.start,
       dur: fit.dur,
@@ -766,7 +771,7 @@
     } else {
       el.dayName.textContent = relName(viewKey);
       el.dayDate.textContent = (viewKey === todayKey() || Math.abs(d - keyToDate(todayKey())) <= 864e5 ? dateLong.format(d) : dateShort.format(d)) +
-        (demoMin !== null && isToday() ? ' · Demo ' + fmt(demoMin) : '');
+        (demoMin !== null && isToday() ? ' · fest ' + fmt(demoMin) : '');
     }
     const t = todayKey();
     let spanHasToday = isToday();
@@ -1875,11 +1880,21 @@
     detail: $('#ed-detail'), startField: $('#ed-start-field'),
     del: $('#ed-delete'), dup: $('#ed-dup'), later: $('#ed-later'), sched: $('#ed-schedule')
   };
-  const typeOpt = (t) => '<label class="type-opt t-' + t + '"' + (SIMPLE[t] ? ' title="' + esc(TYPES[t].label) + '"' : '') + '><input type="radio" name="type" value="' + t + '"><span class="type-sw">' + icon(t) + '</span><span class="type-name">' + esc(typeLabel(t)) + '</span></label>';
-  f.types.innerHTML = MAIN_TYPES.map(typeOpt).join('');
-  f.typesMore.innerHTML = TYPE_ORDER.filter((t) => !SIMPLE[t]).map(typeOpt).join('');
-  f.icons.innerHTML = '<button type="button" class="ic-opt" data-ic="" role="radio" aria-label="Symbol der Art">' + '<span class="auto-lbl">Auto</span></button>' +
-    PICKABLE.map((n) => '<button type="button" class="ic-opt" data-ic="' + n + '" role="radio" aria-label="Symbol ' + n + '">' + icon(n) + '</button>').join('');
+  const typeOpt = (t) => '<label class="type-opt t-' + t + '"><input type="radio" name="type" value="' + t + '"><span class="type-sw">' + icon(t) + '</span><span class="type-name">' + esc(typeLabel(t)) + '</span></label>';
+  function roleTypes(roleId) {
+    const list = (ROLES[roleId] && ROLES[roleId].types) || TYPE_ORDER;
+    return list.filter((t) => TYPES[t]);
+  }
+  function renderTypeOptions(selected) {
+    const list = roleTypes(state.role).slice();
+    if (selected && TYPES[selected] && list.indexOf(selected) < 0) list.push(selected);
+    f.types.innerHTML = list.map(typeOpt).join('');
+    if (f.typesMore) { f.typesMore.hidden = true; f.typesMore.innerHTML = ''; }
+    if (f.moreTypes) f.moreTypes.hidden = true;
+  }
+  renderTypeOptions('deep');
+  f.icons.innerHTML = '<button type="button" class="ic-opt" data-ic="" role="radio" aria-label="Symbol der Art">' + '<span class="auto-lbl">Art</span></button>' +
+    PICKABLE.map((n) => '<button type="button" class="ic-opt" data-ic="' + n + '" role="radio" aria-label="Symbol ' + esc(ICON_NAME[n] || 'Zeichen') + '">' + icon(n) + '</button>').join('');
   f.h.innerHTML = Array.from({ length: 24 }, (_, i) => '<option value="' + i + '">' + pad(i) + '</option>').join('');
   f.chips.innerHTML = [5, 15, 30, 60].map((m) => '<button type="button" class="chip" data-min="' + m + '">' + durText(m) + '</button>').join('');
 
@@ -1893,8 +1908,9 @@
     if (!src) draft.title = '';
     ed = { kind: o.kind, id: src ? src.id : null, day: k, draft, isNew: !src, autoStart: !src && o.start == null };
     f.name.value = draft.title;
-    $('#ed-form input[name="type"][value="' + draft.type + '"]').checked = true;
-    setMoreTypes(!SIMPLE[draft.type]);
+    renderTypeOptions(draft.type);
+    const typeRadio = $('#ed-form input[name="type"][value="' + draft.type + '"]');
+    if (typeRadio) typeRadio.checked = true;
     $$('input[name="when"]', el.editor).forEach((r) => { r.checked = r.value === o.kind; });
     $('#ed-when').hidden = !!src;
     f.detail.open = !!src && o.kind === 'block';
@@ -1924,10 +1940,9 @@
     if (!picks.length) { box.hidden = true; box.innerHTML = ''; return; }
     box.hidden = false;
     box._picks = picks;
-    const kind = { deep: 'Fokus', focused: 'Konzentriert', reactive: 'Reaktiv', meeting: 'Termin', pause: 'Pause', buffer: 'Puffer', quick: 'Kleinkram', flexible: 'Flexibel' };
     box.innerHTML = '<p class="field-label">Vorschläge</p><div class="suggest-row">' + picks.map((s, i) =>
       '<button type="button" class="suggest-btn t-' + s.type + '" data-sug="' + i + '"><b>' + esc(s.title) + '</b><small>' +
-      esc(kind[s.type] || typeLabel(s.type)) + ' · ' + durText(s.dur) + '</small></button>').join('') + '</div>';
+      esc(typeLabel(s.type)) + ' · ' + durText(s.dur) + '</small></button>').join('') + '</div>';
   }
   $('#ed-suggest').addEventListener('click', (e) => {
     const b = e.target.closest('[data-sug]');
@@ -1944,7 +1959,9 @@
     f.name.value = s.title;
     const radio = $('#ed-form input[name="type"][value="' + s.type + '"]');
     if (radio) radio.checked = true;
-    setMoreTypes(!SIMPLE[s.type]);
+    renderTypeOptions(s.type);
+    const picked = $('#ed-form input[name="type"][value="' + s.type + '"]');
+    if (picked) picked.checked = true;
     $$('input[name="when"]', el.editor).forEach((r) => { r.checked = r.value === 'block'; });
     renderTimePick();
     renderEdIcon();
@@ -1978,12 +1995,6 @@
     f.sched.hidden = !(!isBlock && existing);
     renderDur();
   }
-  function setMoreTypes(show) {
-    f.typesMore.hidden = !show;
-    f.moreTypes.setAttribute('aria-expanded', String(show));
-    f.moreTypes.textContent = show ? 'Weniger Typen' : 'Mehr Typen';
-  }
-  f.moreTypes.addEventListener('click', () => setMoreTypes(f.typesMore.hidden));
   $('#ed-when').addEventListener('change', (e) => {
     ed.kind = e.target.value;
     if (ed.kind === 'block' && ed.autoStart) { ed.draft.start = suggestStart(ed.draft.dur, ed.day); renderTimePick(); }
@@ -2227,7 +2238,7 @@
   // Mehr / Einstellungen
   // ==================================================================
   $('#legend').innerHTML = TYPE_ORDER.map((t) =>
-    '<li class="t-' + t + '"><span class="mini-bubble">' + icon(t) + '</span><span><b>' + esc(typeLabel(t)) + (SIMPLE[t] ? ' <small>(' + esc(TYPES[t].label) + ')</small>' : '') + '</b><small>' + esc(TYPES[t].hint) + '</small></span></li>').join('');
+    '<li class="t-' + t + '"><span class="mini-bubble">' + icon(t) + '</span><span><b>' + esc(typeLabel(t)) + '</b><small>' + esc(TYPES[t].hint) + '</small></span></li>').join('');
   const s = {
     newDay: $('#s-newday'), contrast: $('#s-contrast'), hand: $('#s-hand'), start: $('#s-start'), end: $('#s-end'),
     lunch: $('#s-lunch'), lunchDur: $('#s-lunch-dur'),
@@ -2398,7 +2409,7 @@
           'DTSTAMP:' + stamp, 'DTSTART:' + icsUtc(st), 'DTEND:' + icsUtc(en),
           'SUMMARY:' + icsEsc(b.title), 'DESCRIPTION:' + icsEsc(desc), 'CATEGORIES:' + icsEsc(typeLabel(b.type)),
           'TRANSP:' + (b.type === 'pause' ? 'TRANSPARENT' : 'OPAQUE'),
-          'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:' + icsEsc('In 10 Min: ' + b.title), 'TRIGGER:-PT10M', 'END:VALARM',
+          'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:' + icsEsc('In 10 Minuten: ' + b.title), 'TRIGGER:-PT10M', 'END:VALARM',
           'END:VEVENT');
         count++;
       });
@@ -2409,7 +2420,7 @@
   async function exportIcs() {
     const tk = todayKey();
     const week = Array.from({ length: 7 }, (_, i) => addDays(tk, i));
-    const v = await choose({ title: 'In Kalender übernehmen', text: 'Eine .ics-Datei. Dein Kalender erinnert 10 Min vorher, auch wenn diese App zu ist.', options: [
+    const v = await choose({ title: 'In Kalender übernehmen', text: 'Eine Kalenderdatei. Dein Kalender erinnert 10 Min vorher, auch wenn diese App zu ist.', options: [
       { value: 'today', label: 'Heute', desc: buildIcs([tk]).count + ' Blöcke ab jetzt', icon: 'calendar' },
       { value: 'week', label: 'Die nächsten 7 Tage', desc: buildIcs(week).count + ' Blöcke', icon: 'repeat' }] });
     if (!v) return;

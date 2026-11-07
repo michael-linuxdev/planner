@@ -123,6 +123,12 @@
     return dx >= 48 && dx > Math.abs(dy) * 1.5;
   }
 
+  function canonicalType(type) {
+    if (type === 'deep' || type === 'meeting' || type === 'pause' || type === 'buffer' || type === 'quick') return type;
+    if (type === 'focused') return 'deep';
+    return 'quick';
+  }
+
   function halfOf(block, lunchStart, lunchEnd) {
     if (!block) return 'am';
     if (block.lunch) return 'lunch';
@@ -229,5 +235,5 @@
     return { title: m[3].slice(0, 80), start: fit.start, dur: fit.dur };
   }
 
-  return { isSafeId, takeId, weekday, isWeekend, fitTime, ruleHits, icsUid, saveMessage, pullTime, isPristineTemplate, pickSuggestions, swipeDone, overlapSlices, pushFollowing, halfOf, placeFlex, DAY };
+  return { isSafeId, takeId, weekday, isWeekend, fitTime, ruleHits, icsUid, saveMessage, pullTime, isPristineTemplate, pickSuggestions, swipeDone, overlapSlices, pushFollowing, halfOf, placeFlex, canonicalType, DAY };
 });

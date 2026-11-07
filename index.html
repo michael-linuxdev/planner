@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Tagesplaner</title>
-  <meta name="description" content="Visueller Tagesplaner – ruhig, lokal, offline. Kein Konto, keine Cloud, keine KI.">
+  <meta name="description" content="Visueller Tagesplaner – ruhig, lokal, ohne Netz. Kein Konto, keine Weitergabe, keine KI.">
   <meta name="theme-color" content="#f5f4f0" id="meta-theme">
   <meta name="color-scheme" content="light dark">
   <meta name="mobile-web-app-capable" content="yes">
@@ -38,7 +38,7 @@
       <div id="role-list" class="role-list"></div>
       <ul class="onb-points">
         <li data-icon="lock">Alles bleibt auf deinem Gerät</li>
-        <li data-icon="offline">Funktioniert offline</li>
+        <li data-icon="offline">Funktioniert ohne Netz</li>
         <li data-icon="smile">Kein Konto, keine KI</li>
       </ul>
       <button id="onb-cancel" type="button" class="btn ghost wide" hidden>Zurück</button>
@@ -151,7 +151,7 @@
         <fieldset class="field">
           <legend class="field-label">Art</legend>
           <div id="ed-types" class="type-grid"></div>
-          <button id="ed-more-types" type="button" class="link-btn" aria-expanded="false" aria-controls="ed-types-more">Mehr Typen</button>
+          <button id="ed-more-types" type="button" class="link-btn" aria-expanded="false" aria-controls="ed-types-more" hidden>Weitere Arten</button>
           <div id="ed-types-more" class="type-grid" hidden></div>
         </fieldset>
 
@@ -219,9 +219,9 @@
           <div class="list">
             <button id="m-wrap" type="button" class="list-btn" data-icon="moon"><span><b>Tag abschließen</b><small>Offenes auf morgen oder nach „Später“</small></span></button>
             <button id="m-replan" type="button" class="list-btn" data-icon="refresh"><span><b>Tag neu planen</b><small>Mit Rollen-Vorlage, eigener Vorlage oder leer</small></span></button>
-            <button id="m-ics" type="button" class="list-btn" data-icon="calendar"><span><b>In Kalender übernehmen</b><small>.ics-Datei mit Erinnerung 10 Min vorher</small></span></button>
+            <button id="m-ics" type="button" class="list-btn" data-icon="calendar"><span><b>In Kalender übernehmen</b><small>Kalenderdatei mit Erinnerung 10 Min vorher</small></span></button>
           </div>
-          <p class="field-label" id="lbl-energy">Energie heute <small class="muted">(optional)</small></p>
+          <p class="field-label" id="lbl-energy">Energie heute <small class="muted">(wenn du magst)</small></p>
           <div id="m-energy" class="energy-row" role="group" aria-labelledby="lbl-energy"></div>
           <p id="m-energy-tip" class="muted small"></p>
         </section>
@@ -243,7 +243,7 @@
           <div class="row-field">
             <span id="lbl-theme">Erscheinungsbild</span>
             <div class="segmented" role="radiogroup" aria-labelledby="lbl-theme">
-              <label><input type="radio" name="theme" value="auto"><span>Auto</span></label>
+              <label><input type="radio" name="theme" value="auto"><span>Automatisch</span></label>
               <label><input type="radio" name="theme" value="light"><span>Hell</span></label>
               <label><input type="radio" name="theme" value="dark"><span>Dunkel</span></label>
             </div>
@@ -257,9 +257,9 @@
             <input id="s-hand" type="checkbox" role="switch">
           </label>
           <div class="row-field">
-            <span id="lbl-pal">Farben<small>Auto: Social Media nutzt die warme Variante</small></span>
+            <span id="lbl-pal">Farben<small>Automatisch folgt der Rolle</small></span>
             <div class="segmented" role="radiogroup" aria-labelledby="lbl-pal">
-              <label><input type="radio" name="palette" value="auto"><span>Auto</span></label>
+              <label><input type="radio" name="palette" value="auto"><span>Automatisch</span></label>
               <label><input type="radio" name="palette" value="cool"><span>Kühl</span></label>
               <label><input type="radio" name="palette" value="warm"><span>Warm</span></label>
             </div>
@@ -316,14 +316,14 @@
         <details class="group fold">
           <summary class="group-title">Daten &amp; App</summary>
           <div class="list">
-            <button id="s-export" type="button" class="list-btn" data-icon="download"><span><b>Sicherung exportieren</b><small>JSON-Datei herunterladen</small></span></button>
+            <button id="s-export" type="button" class="list-btn" data-icon="download"><span><b>Sicherung exportieren</b><small>Sicherungsdatei herunterladen</small></span></button>
             <button id="s-import" type="button" class="list-btn" data-icon="upload"><span><b>Sicherung importieren</b><small>Ersetzt die aktuellen Daten (rückgängig möglich)</small></span></button>
-            <button id="s-install" type="button" class="list-btn" data-icon="download" hidden><span><b>Als App installieren</b><small>Startbildschirm / Dock</small></span></button>
+            <button id="s-install" type="button" class="list-btn" data-icon="download" hidden><span><b>Als App installieren</b><small>Auf den Startbildschirm</small></span></button>
             <button id="s-reset" type="button" class="list-btn danger" data-icon="trash"><span><b>Alle Daten löschen</b></span></button>
           </div>
           <input id="s-import-file" type="file" accept="application/json,.json" hidden>
         </details>
-        <p class="about">Tagesplaner · Version 3.1 · Kein Konto, keine Cloud, keine KI. Deine Daten verlassen nie dieses Gerät.</p>
+        <p class="about">Tagesplaner · Version 3.1 · Kein Konto, keine Weitergabe, keine KI. Deine Daten verlassen nie dieses Gerät.</p>
       </div>
     </div>
   </dialog>
