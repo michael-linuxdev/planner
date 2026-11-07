@@ -20,16 +20,17 @@ Alles andere steckt im Menü **Mehr**: Tag abschließen, Tag neu planen, In Kale
 
 | Aktion | So geht's |
 |---|---|
-| Neu anlegen | Der große **+**-Knopf. Titel, Art (Fokus · Termin · Pause · Kleinkram), Dauer (5/15/30/60 Min) – Start ist automatisch die nächste freie Lücke. Uhrzeit, eigene Dauer, Wiederholung und Unteraufgaben unter „Genauer“; alle 8 Arten unter „Mehr Typen“. „Später (ohne Uhrzeit)“ legt die Aufgabe in die Später-Liste. |
+| Neu anlegen | Der große **+**-Knopf. Titel, Art (Fokus · Termin · Pause · Kleinkram), Dauer (5/15/30/60 Min) – Start ist automatisch die nächste freie Lücke. Uhrzeit, eigene Dauer, Wiederholung und Unteraufgaben unter „Uhrzeit & mehr“; alle 8 Arten unter „Mehr Typen“. „Später (ohne Uhrzeit)“ legt die Aufgabe in die Später-Liste. |
 | Bearbeiten | Block antippen |
-| Verschieben | Maus: ziehen. Touch: Symbol (Bubble) sofort ziehen oder Karte lange drücken. Wischen scrollt. |
+| Verschieben | Maus: ziehen. Touch: Symbol (Bubble) sofort ziehen oder Karte lange drücken. Wischen scrollt. Der Block folgt dem Finger stufenlos, ein gestrichelter Umriss zeigt, wo er einrastet (5 oder 15 Min). |
 | Dauer ändern | Griff an der Unterkante ziehen |
 | Abhaken | Kreis rechts im Block oder „Erledigt“ in Jetzt |
 | Aufgabe aus Später einplanen | „Einplanen“ → Uhrzeit im Plan antippen (auf 15 Min gerundet) oder „Nächste Lücke“ |
 | Tagesabschluss | Nach dem letzten Block erscheint in Heute und Jetzt: „x von y geschafft – Rest auf morgen?“ → *Auf morgen* (gleiche Uhrzeit, wenn frei), *Nach „Später“* oder *So lassen*. Jederzeit auch über Mehr → „Tag abschließen“. |
 | Kalender | Mehr → „In Kalender übernehmen“: .ics für heute oder die nächsten 7 Tage, jeder Termin mit Erinnerung 10 Min vorher (VALARM). Datei öffnen → in die Kalender-App übernehmen. |
 | Rückgängig | Hinweis-Leiste „Rückgängig“ oder Strg/⌘ + Z |
-| Tastatur | Block fokussieren: Enter = bearbeiten, Leertaste = erledigt, ↑/↓ = verschieben, Umschalt + ↑/↓ = Dauer, Entf = löschen, Esc = Einplanen abbrechen |
+| Tastatur | Block fokussieren: Enter = bearbeiten, Leertaste = erledigt, ↑/↓ = verschieben, Umschalt + ↑/↓ = Dauer, Entf = löschen, Esc = Einplanen abbrechen. In Fenstern: Esc schließt, Tab bleibt im Fenster, danach kehrt der Fokus zurück. |
+| Fenster schließen | ✕, Esc, Tippen daneben oder (mobil) am Kopf nach unten wischen |
 
 **Arten:** Fokus = Deep Work, Termin = Meeting, Pause, Kleinkram = Quick/Admin. Focused, Reactive, Buffer und Flexible bleiben unter „Mehr Typen“; die Rollen-Vorlagen nutzen alle 8 Arten mit ihren Farben.
 
@@ -53,7 +54,7 @@ Statisch, kein Build-Schritt: `CNAME` (planner.micana.de), `.nojekyll`, `404.htm
 2. GitHub → Settings → Pages → *Deploy from a branch* → `main` / `/ (root)`.
 3. DNS: `CNAME`-Eintrag `planner` → `michael-linuxdev.github.io`, danach „Enforce HTTPS“.
 
-**Updates:** Nach Code-Änderungen die Konstante `CACHE` in `sw.js` erhöhen (aktuell `tagesplaner-v3.0.0`). Der Service Worker liefert sofort aus dem Cache und lädt im Hintergrund nach; die neue Version ist beim nächsten Öffnen aktiv.
+**Updates:** Nach Code-Änderungen die Konstante `CACHE` in `sw.js` erhöhen (aktuell `tagesplaner-v3.1.0`). Der Service Worker liefert sofort aus dem Cache und lädt im Hintergrund nach; sobald die neue Version bereit ist, erscheint „Neue Version ist bereit · Neu laden“.
 
 ## Als App installieren
 
@@ -81,3 +82,5 @@ CNAME, .nojekyll, 404.html   GitHub-Pages-Einrichtung
 - Änderungen an Wiederholungen wirken ab dem gewählten Tag, nicht rückwirkend.
 - „Auf morgen“ übernimmt Blöcke, die morgen ohnehin (Vorlage/Wiederholung) wieder dabei sind, nicht doppelt.
 - Aufgaben aus „Später“ werden per Tippen eingeplant, nicht per Ziehen.
+- Sehr kurze Blöcke (unter 15 Min) zeigen nur den Titel; lange Titel werden gekürzt – der volle Titel steht im Tooltip und im Editor.
+- Vibration gibt es nur auf Geräten/Browsern mit `navigator.vibrate` (z. B. Android-Chrome, nicht iOS Safari).
